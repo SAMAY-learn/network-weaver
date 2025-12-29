@@ -1,1 +1,7 @@
 project_id = "igqbmvuhbjpmoqcccamt"
+
+[functions.extract-entities]
+verify_jwt = false
+
+[functions.calculate-threat-scores]
+verify_jwt = false
