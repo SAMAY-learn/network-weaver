@@ -21,6 +21,7 @@ import KingpinCard from '@/components/KingpinCard';
 import UploadPanel from '@/components/UploadPanel';
 import ClusterAnalysis from '@/components/ClusterAnalysis';
 import SettingsPanel from '@/components/SettingsPanel';
+import SuspectsPanel from '@/components/SuspectsPanel';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { useKingpins, Kingpin } from '@/hooks/useKingpins';
 import { useAuth } from '@/hooks/useAuth';
@@ -348,7 +349,11 @@ const Index = () => {
             </div>
           )}
 
-          {(activeTab === 'suspects' || activeTab === 'reports') && (
+          {activeTab === 'suspects' && (
+            <SuspectsPanel />
+          )}
+
+          {activeTab === 'reports' && (
             <div className="flex items-center justify-center h-full">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
