@@ -1,0 +1,390 @@
+import React, { useEffect, useRef, useState } from 'react';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { Suspect } from '@/hooks/useSuspects';
+import { MapPin, Key, AlertTriangle } from 'lucide-react';
+import { Button } from './ui/button';
+import { motion } from 'framer-motion';
+
+// Jharkhand district coordinates
+const JHARKHAND_LOCATIONS: Record<string, [number, number]> = {
+  'Jamtara': [86.8013, 23.9577],
+  'Deoghar': [86.6925, 24.4854],
+  'Dumka': [87.2480, 24.2651],
+  'Ranchi': [85.3096, 23.3441],
+  'Jamshedpur': [86.1833, 22.8046],
+  'Dhanbad': [86.4305, 23.7957],
+  'Bokaro': [86.1511, 23.6693],
+  'Hazaribagh': [85.3569, 23.9921],
+  'Giridih': [86.3039, 24.1941],
+  'Godda': [87.2127, 24.8271],
+  'Sahebganj': [87.6438, 25.2518],
+  'Pakur': [87.8395, 24.6358],
+  'Koderma': [85.5944, 24.4676],
+  'Chatra': [84.8699, 24.2057],
+  'Palamu': [84.0730, 24.0269],
+  'Garhwa': [83.8047, 24.1577],
+  'Latehar': [84.5138, 23.7407],
+  'Lohardaga': [84.6836, 23.4327],
+  'Gumla': [84.5420, 23.0449],
+  'Simdega': [84.5051, 22.6152],
+  'Khunti': [85.2786, 23.0715],
+  'Ramgarh': [85.5619, 23.6302],
+  'Seraikela': [85.8325, 22.6100],
+  'West Singhbhum': [85.8245, 22.3615],
+  'East Singhbhum': [86.1833, 22.8046],
+};
+
+// Jharkhand center coordinates
+const JHARKHAND_CENTER: [number, number] = [85.5, 23.6];
+
+interface SuspectMapProps {
+  suspects: Suspect[];
+  onSuspectClick?: (suspectId: string) => void;
+}
+
+const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const [mapboxToken, setMapboxToken] = useState(() => 
+    localStorage.getItem('mapbox_token') || ''
+  );
+  const [tokenInput, setTokenInput] = useState('');
+  const [isMapReady, setIsMapReady] = useState(false);
+
+  // Group suspects by location with coordinates
+  const suspectsByLocation = React.useMemo(() => {
+    const grouped: Record<string, { 
+      coords: [number, number]; 
+      suspects: Suspect[];
+      threatCounts: { high: number; medium: number; low: number };
+    }> = {};
+
+    suspects.forEach(suspect => {
+      if (!suspect.location) return;
+      
+      // Find matching location
+      const locationKey = Object.keys(JHARKHAND_LOCATIONS).find(
+        loc => suspect.location?.toLowerCase().includes(loc.toLowerCase())
+      );
+
+      if (locationKey) {
+        if (!grouped[locationKey]) {
+          grouped[locationKey] = {
+            coords: JHARKHAND_LOCATIONS[locationKey],
+            suspects: [],
+            threatCounts: { high: 0, medium: 0, low: 0 },
+          };
+        }
+        grouped[locationKey].suspects.push(suspect);
+        const level = suspect.threat_level || 'low';
+        grouped[locationKey].threatCounts[level]++;
+      }
+    });
+
+    return grouped;
+  }, [suspects]);
+
+  const saveToken = () => {
+    if (tokenInput.trim()) {
+      localStorage.setItem('mapbox_token', tokenInput.trim());
+      setMapboxToken(tokenInput.trim());
+    }
+  };
+
+  const clearToken = () => {
+    localStorage.removeItem('mapbox_token');
+    setMapboxToken('');
+    setTokenInput('');
+    if (map.current) {
+      map.current.remove();
+      map.current = null;
+    }
+    setIsMapReady(false);
+  };
+
+  useEffect(() => {
+    if (!mapContainer.current || !mapboxToken) return;
+
+    mapboxgl.accessToken = mapboxToken;
+
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: JHARKHAND_CENTER,
+        zoom: 7,
+        pitch: 30,
+      });
+
+      map.current.addControl(
+        new mapboxgl.NavigationControl({ visualizePitch: true }),
+        'top-right'
+      );
+
+      map.current.on('load', () => {
+        setIsMapReady(true);
+      });
+
+      map.current.on('error', (e) => {
+        console.error('Mapbox error:', e);
+        if (e.error?.message?.includes('401')) {
+          clearToken();
+        }
+      });
+
+      return () => {
+        markersRef.current.forEach(marker => marker.remove());
+        markersRef.current = [];
+        map.current?.remove();
+        map.current = null;
+      };
+    } catch (error) {
+      console.error('Failed to initialize map:', error);
+      clearToken();
+    }
+  }, [mapboxToken]);
+
+  // Add markers when map is ready
+  useEffect(() => {
+    if (!map.current || !isMapReady) return;
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+
+    // Add new markers
+    Object.entries(suspectsByLocation).forEach(([location, data]) => {
+      const { coords, suspects: locationSuspects, threatCounts } = data;
+      
+      // Determine marker color based on threat levels
+      const dominantThreat = threatCounts.high > 0 ? 'high' : 
+                             threatCounts.medium > 0 ? 'medium' : 'low';
+      
+      // Create custom marker element
+      const el = document.createElement('div');
+      el.className = 'suspect-marker';
+      
+      const size = Math.min(24 + locationSuspects.length * 4, 48);
+      const colors = {
+        high: '#ef4444',
+        medium: '#f59e0b', 
+        low: '#22c55e',
+      };
+      
+      el.innerHTML = `
+        <div style="
+          width: ${size}px;
+          height: ${size}px;
+          background: ${colors[dominantThreat]}40;
+          border: 2px solid ${colors[dominantThreat]};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.2s;
+          box-shadow: 0 0 20px ${colors[dominantThreat]}60;
+        ">
+          <span style="
+            color: ${colors[dominantThreat]};
+            font-weight: bold;
+            font-size: ${Math.max(12, size / 3)}px;
+          ">${locationSuspects.length}</span>
+        </div>
+      `;
+
+      el.addEventListener('mouseenter', () => {
+        el.querySelector('div')!.style.transform = 'scale(1.2)';
+      });
+      el.addEventListener('mouseleave', () => {
+        el.querySelector('div')!.style.transform = 'scale(1)';
+      });
+
+      // Create popup
+      const popup = new mapboxgl.Popup({ offset: 25, closeButton: false })
+        .setHTML(`
+          <div style="
+            background: #1a1a2e;
+            padding: 12px;
+            border-radius: 8px;
+            min-width: 180px;
+          ">
+            <h3 style="
+              color: #fff;
+              font-size: 14px;
+              font-weight: 600;
+              margin-bottom: 8px;
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            ">
+              <span style="color: ${colors[dominantThreat]}">●</span>
+              ${location}
+            </h3>
+            <div style="color: #a0aec0; font-size: 12px; line-height: 1.6;">
+              <div style="display: flex; justify-content: space-between;">
+                <span>Total Suspects:</span>
+                <span style="color: #fff; font-weight: 500;">${locationSuspects.length}</span>
+              </div>
+              ${threatCounts.high > 0 ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #ef4444;">High Risk:</span>
+                  <span style="color: #ef4444; font-weight: 500;">${threatCounts.high}</span>
+                </div>
+              ` : ''}
+              ${threatCounts.medium > 0 ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #f59e0b;">Medium Risk:</span>
+                  <span style="color: #f59e0b; font-weight: 500;">${threatCounts.medium}</span>
+                </div>
+              ` : ''}
+              ${threatCounts.low > 0 ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #22c55e;">Low Risk:</span>
+                  <span style="color: #22c55e; font-weight: 500;">${threatCounts.low}</span>
+                </div>
+              ` : ''}
+            </div>
+            <div style="
+              margin-top: 10px;
+              padding-top: 10px;
+              border-top: 1px solid #2d3748;
+              font-size: 11px;
+              color: #718096;
+            ">
+              Click to view suspects
+            </div>
+          </div>
+        `);
+
+      el.addEventListener('click', () => {
+        // If there's only one suspect, open their detail
+        if (locationSuspects.length === 1 && onSuspectClick) {
+          onSuspectClick(locationSuspects[0].id);
+        }
+      });
+
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat(coords)
+        .setPopup(popup)
+        .addTo(map.current!);
+
+      markersRef.current.push(marker);
+    });
+  }, [suspectsByLocation, isMapReady, onSuspectClick]);
+
+  // Token input screen
+  if (!mapboxToken) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-6 rounded-xl border border-border/50"
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Key className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
+            <p className="text-sm text-muted-foreground">
+              Enter your Mapbox public token to enable the map
+            </p>
+          </div>
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+              Mapbox Public Token
+            </label>
+            <input
+              type="text"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="pk.eyJ1Ijo..."
+              className="w-full px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button onClick={saveToken} disabled={!tokenInput.trim()}>
+              <MapPin className="w-4 h-4 mr-2" />
+              Enable Map
+            </Button>
+            <a
+              href="https://mapbox.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline"
+            >
+              Get a free token →
+            </a>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass-card rounded-xl border border-border/50 overflow-hidden"
+    >
+      {/* Map Header */}
+      <div className="flex items-center justify-between p-3 border-b border-border/30">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">Suspect Locations - Jharkhand</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Legend */}
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-destructive" />
+              <span className="text-muted-foreground">High</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-warning" />
+              <span className="text-muted-foreground">Medium</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-success" />
+              <span className="text-muted-foreground">Low</span>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={clearToken} className="text-xs">
+            Change Token
+          </Button>
+        </div>
+      </div>
+
+      {/* Map Container */}
+      <div ref={mapContainer} className="w-full h-[400px]" />
+      
+      {/* Stats Footer */}
+      <div className="flex items-center justify-between p-3 border-t border-border/30 bg-secondary/20">
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-muted-foreground">
+            {Object.keys(suspectsByLocation).length} locations • {suspects.filter(s => s.location).length} mapped suspects
+          </span>
+        </div>
+        {suspects.filter(s => !s.location || !Object.keys(JHARKHAND_LOCATIONS).some(
+          loc => s.location?.toLowerCase().includes(loc.toLowerCase())
+        )).length > 0 && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <AlertTriangle className="w-3 h-3" />
+            {suspects.filter(s => !s.location || !Object.keys(JHARKHAND_LOCATIONS).some(
+              loc => s.location?.toLowerCase().includes(loc.toLowerCase())
+            )).length} suspects without mappable location
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+export default SuspectMap;

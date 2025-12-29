@@ -11,13 +11,15 @@ import {
   ChevronDown,
   X,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Map
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Skeleton } from './ui/skeleton';
 import { useSuspects, Suspect } from '@/hooks/useSuspects';
 import SuspectDetailModal from './SuspectDetailModal';
+import SuspectMap from './SuspectMap';
 import { toast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 
@@ -30,6 +32,7 @@ const SuspectsPanel = () => {
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSuspectId, setSelectedSuspectId] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(true);
 
   // Get unique locations for filter dropdown
   const locations = useMemo(() => {
@@ -224,6 +227,16 @@ const SuspectsPanel = () => {
                 <FileSpreadsheet className="w-4 h-4" />
                 Excel
               </Button>
+
+              <Button 
+                variant={showMap ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowMap(!showMap)}
+                className="gap-2"
+              >
+                <Map className="w-4 h-4" />
+                Map
+              </Button>
               
               <Button 
                 variant={showFilters ? "default" : "outline"}
@@ -328,6 +341,22 @@ const SuspectsPanel = () => {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Map Visualization */}
+        <AnimatePresence>
+          {showMap && suspects && suspects.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <SuspectMap 
+                suspects={filteredSuspects} 
+                onSuspectClick={(id) => setSelectedSuspectId(id)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Suspects Grid */}
         {isLoading ? (
