@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import cytoscape, { Core, NodeSingular } from 'cytoscape';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNetworkGraph, NetworkNode, NetworkEdge } from '@/hooks/useNetworkGraph';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ZoomIn, ZoomOut, Maximize2, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Minimize2, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Mock data for when database is empty
@@ -99,6 +99,7 @@ const CytoscapeGraph = () => {
   const cyRef = useRef<Core | null>(null);
   const { data: networkData, isLoading } = useNetworkGraph();
   const [selectedNode, setSelectedNode] = useState<SelectedNodeInfo | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const nodes = networkData?.nodes.length ? networkData.nodes : mockNodes;
   const edges = networkData?.edges.length ? networkData.edges : mockEdges;
@@ -245,11 +246,11 @@ const CytoscapeGraph = () => {
     }
   };
 
-  const handleFit = () => {
+  const handleFit = useCallback(() => {
     if (cyRef.current) {
       cyRef.current.fit(undefined, 50);
     }
-  };
+  }, []);
 
   const handleReset = () => {
     if (cyRef.current) {
@@ -257,6 +258,31 @@ const CytoscapeGraph = () => {
       cyRef.current.fit(undefined, 50);
     }
   };
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
+
+  // Handle ESC key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  // Refit graph when fullscreen changes
+  useEffect(() => {
+    if (cyRef.current) {
+      setTimeout(() => {
+        cyRef.current?.resize();
+        cyRef.current?.fit(undefined, 50);
+      }, 100);
+    }
+  }, [isFullscreen]);
 
   const getNodeIcon = (type: NetworkNode['type']) => {
     switch (type) {
@@ -280,25 +306,58 @@ const CytoscapeGraph = () => {
   }
 
   return (
-    <div className="relative w-full h-full min-h-[500px] network-grid rounded-xl overflow-hidden">
-      {/* Cytoscape container */}
-      <div ref={containerRef} className="absolute inset-0" />
+    <AnimatePresence>
+      <motion.div 
+        className={`${
+          isFullscreen 
+            ? 'fixed inset-0 z-50 bg-background' 
+            : 'relative w-full h-full min-h-[500px]'
+        } network-grid rounded-xl overflow-hidden`}
+        layout
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      >
+        {/* Cytoscape container */}
+        <div ref={containerRef} className="absolute inset-0" />
 
-      {/* Controls */}
-      <div className="absolute top-4 right-4 flex flex-col gap-2">
-        <Button variant="glass" size="icon" onClick={handleZoomIn} title="Zoom In">
-          <ZoomIn className="w-4 h-4" />
-        </Button>
-        <Button variant="glass" size="icon" onClick={handleZoomOut} title="Zoom Out">
-          <ZoomOut className="w-4 h-4" />
-        </Button>
-        <Button variant="glass" size="icon" onClick={handleFit} title="Fit to View">
-          <Maximize2 className="w-4 h-4" />
-        </Button>
-        <Button variant="glass" size="icon" onClick={handleReset} title="Reset View">
-          <RotateCcw className="w-4 h-4" />
-        </Button>
-      </div>
+        {/* Fullscreen close button */}
+        {isFullscreen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-10"
+          >
+            <Button 
+              variant="glass" 
+              size="sm" 
+              onClick={toggleFullscreen}
+              className="gap-2"
+            >
+              <X className="w-4 h-4" />
+              Exit Fullscreen (ESC)
+            </Button>
+          </motion.div>
+        )}
+
+        {/* Controls */}
+        <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+          <Button variant="glass" size="icon" onClick={handleZoomIn} title="Zoom In">
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button variant="glass" size="icon" onClick={handleZoomOut} title="Zoom Out">
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <Button 
+            variant="glass" 
+            size="icon" 
+            onClick={toggleFullscreen} 
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </Button>
+          <Button variant="glass" size="icon" onClick={handleReset} title="Reset View">
+            <RotateCcw className="w-4 h-4" />
+          </Button>
+        </div>
 
       {/* Legend */}
       <div className="absolute bottom-4 left-4 glass-card p-3 rounded-lg">
@@ -370,8 +429,9 @@ const CytoscapeGraph = () => {
             <div>ID: <span className="text-foreground">{selectedNode.id.slice(0, 8)}...</span></div>
           </div>
         </motion.div>
-      )}
-    </div>
+        )}
+      </motion.div>
+    </AnimatePresence>
   );
 };
 
