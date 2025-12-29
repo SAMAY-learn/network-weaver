@@ -12,10 +12,15 @@ import {
   Globe, 
   Users,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Sparkles,
+  Brain
 } from 'lucide-react';
 import { Button } from './ui/button';
+import { Switch } from './ui/switch';
 import { DataType } from '@/lib/fileParser';
+import { useAIExtraction } from '@/hooks/useAIExtraction';
+import { toast } from '@/hooks/use-toast';
 
 interface FileUpload {
   id: string;
@@ -24,19 +29,27 @@ interface FileUpload {
 }
 
 interface UploadState {
-  status: 'idle' | 'parsing' | 'uploading' | 'complete' | 'error';
+  status: 'idle' | 'parsing' | 'uploading' | 'extracting' | 'complete' | 'error';
   progress: number;
   message: string;
   parsedData?: {
     type: DataType;
     rowCount: number;
   };
+  aiExtracted?: boolean;
 }
 
 const UploadPanel = () => {
   const [files, setFiles] = useState<FileUpload[]>([]);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const queryClient = useQueryClient();
+  const { extractEntities, saveExtractedEntities, recalculateThreatScores, isExtracting } = useAIExtraction();
+
+  const isTextFile = (file: File): boolean => {
+    const textExtensions = ['.txt', '.log', '.json', '.md', '.text'];
+    return textExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+  };
 
   const handleFileSelect = async (selectedFiles: FileList | null, expectedType?: DataType) => {
     if (!selectedFiles) return;
@@ -58,8 +71,104 @@ const UploadPanel = () => {
       newFiles.push(uploadFile);
       setFiles(prev => [...prev, uploadFile]);
       
-      // Process the file
-      processFileWithState(id, file);
+      // Process the file - check if AI extraction should be used
+      if (aiEnabled && isTextFile(file)) {
+        processWithAI(id, file);
+      } else {
+        processFileWithState(id, file);
+      }
+    }
+  };
+
+  const processWithAI = async (id: string, file: File) => {
+    // Update to extracting
+    setFiles(prev => prev.map(f => 
+      f.id === id 
+        ? { ...f, state: { status: 'extracting', progress: 10, message: 'Reading file content...' } }
+        : f
+    ));
+
+    try {
+      // Read file content
+      const content = await file.text();
+      
+      setFiles(prev => prev.map(f => 
+        f.id === id 
+          ? { ...f, state: { status: 'extracting', progress: 30, message: 'AI analyzing entities...' } }
+          : f
+      ));
+
+      // Extract entities using AI
+      const result = await extractEntities(content, file.type || 'text/plain');
+      
+      if (!result.success || !result.entities) {
+        setFiles(prev => prev.map(f => 
+          f.id === id 
+            ? { ...f, state: { status: 'error', progress: 0, message: result.error || 'AI extraction failed' } }
+            : f
+        ));
+        return;
+      }
+
+      setFiles(prev => prev.map(f => 
+        f.id === id 
+          ? { ...f, state: { status: 'uploading', progress: 60, message: 'Saving extracted entities...' } }
+          : f
+      ));
+
+      // Save extracted entities
+      const saved = await saveExtractedEntities(result.entities);
+      
+      if (!saved) {
+        setFiles(prev => prev.map(f => 
+          f.id === id 
+            ? { ...f, state: { status: 'error', progress: 0, message: 'Failed to save entities' } }
+            : f
+        ));
+        return;
+      }
+
+      // Calculate threat scores
+      setFiles(prev => prev.map(f => 
+        f.id === id 
+          ? { ...f, state: { status: 'uploading', progress: 85, message: 'Calculating threat scores...' } }
+          : f
+      ));
+
+      await recalculateThreatScores();
+
+      // Count total entities
+      const totalEntities = (result.summary?.suspects || 0) + 
+        (result.summary?.sim_cards || 0) + 
+        (result.summary?.devices || 0) + 
+        (result.summary?.mule_accounts || 0) + 
+        (result.summary?.ip_addresses || 0);
+
+      setFiles(prev => prev.map(f => 
+        f.id === id 
+          ? { 
+              ...f, 
+              state: { 
+                status: 'complete', 
+                progress: 100, 
+                message: `AI extracted ${totalEntities} entities`,
+                aiExtracted: true,
+              } 
+            }
+          : f
+      ));
+
+      toast({
+        title: 'AI Extraction Complete',
+        description: `Extracted ${result.summary?.suspects || 0} suspects, ${result.summary?.sim_cards || 0} SIMs, ${result.summary?.devices || 0} devices, ${result.summary?.mule_accounts || 0} accounts`,
+      });
+
+    } catch (error) {
+      setFiles(prev => prev.map(f => 
+        f.id === id 
+          ? { ...f, state: { status: 'error', progress: 0, message: error instanceof Error ? error.message : 'AI extraction error' } }
+          : f
+      ));
     }
   };
 
@@ -279,21 +388,52 @@ const UploadPanel = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with AI Toggle */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-foreground">Data Upload</h3>
           <p className="text-sm text-muted-foreground">
-            Upload CSV or Excel files to import fraud data
+            Upload CSV, Excel, or text files to import fraud data
           </p>
         </div>
-        {completedCount > 0 && (
-          <div className="text-right">
-            <p className="text-sm font-medium text-success">{completedCount} files imported</p>
-            <p className="text-xs text-muted-foreground">{totalRecords.toLocaleString()} total records</p>
+        <div className="flex items-center gap-4">
+          {/* AI Toggle */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
+            <Brain className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium text-foreground">AI Extraction</span>
+            <Switch 
+              checked={aiEnabled} 
+              onCheckedChange={setAiEnabled}
+              className="data-[state=checked]:bg-primary"
+            />
           </div>
-        )}
+          {completedCount > 0 && (
+            <div className="text-right">
+              <p className="text-sm font-medium text-success">{completedCount} files imported</p>
+              <p className="text-xs text-muted-foreground">{totalRecords.toLocaleString()} total records</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* AI Info Banner */}
+      {aiEnabled && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20"
+        >
+          <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-foreground">AI-Powered Entity Extraction</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Upload text files (.txt, .log, .json) and our Gemini AI will automatically extract suspects, phone numbers, 
+              bank accounts, devices, and IP addresses. Threat scores are calculated using graph algorithms.
+            </p>
+          </div>
+        </motion.div>
+      )}
 
       {/* Main Drop Zone */}
       <motion.div
@@ -305,7 +445,7 @@ const UploadPanel = () => {
           type="file"
           ref={el => fileInputRefs.current['main'] = el}
           onChange={(e) => handleFileSelect(e.target.files)}
-          accept=".csv,.xlsx,.xls"
+          accept={aiEnabled ? ".csv,.xlsx,.xls,.txt,.log,.json,.md" : ".csv,.xlsx,.xls"}
           multiple
           className="hidden"
         />
@@ -314,17 +454,29 @@ const UploadPanel = () => {
           className="text-center cursor-pointer"
           onClick={() => handleZoneClick('main')}
         >
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <FileSpreadsheet className="w-8 h-8 text-primary" />
+          <div className={`w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center ${
+            aiEnabled ? 'bg-gradient-to-br from-primary/20 to-accent/20' : 'bg-primary/10'
+          }`}>
+            {aiEnabled ? (
+              <Sparkles className="w-8 h-8 text-primary" />
+            ) : (
+              <FileSpreadsheet className="w-8 h-8 text-primary" />
+            )}
           </div>
           <h4 className="text-lg font-semibold text-foreground mb-2">
             Drop files here or click to upload
           </h4>
           <p className="text-sm text-muted-foreground mb-4">
-            Supports CSV and Excel files (.csv, .xlsx, .xls)
+            {aiEnabled 
+              ? 'Supports CSV, Excel, and text files (.csv, .xlsx, .xls, .txt, .log, .json)'
+              : 'Supports CSV and Excel files (.csv, .xlsx, .xls)'
+            }
           </p>
           <p className="text-xs text-muted-foreground">
-            Files are automatically detected based on column headers
+            {aiEnabled 
+              ? 'Text files are processed with AI • Structured files are auto-detected'
+              : 'Files are automatically detected based on column headers'
+            }
           </p>
         </div>
       </motion.div>
@@ -383,13 +535,18 @@ const UploadPanel = () => {
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                       upload.state.status === 'complete' ? 'bg-success/20' :
                       upload.state.status === 'error' ? 'bg-destructive/20' :
+                      upload.state.status === 'extracting' ? 'bg-gradient-to-br from-primary/20 to-accent/20' :
                       'bg-primary/20'
                     }`}>
-                      <Icon className={`w-4 h-4 ${
-                        upload.state.status === 'complete' ? 'text-success' :
-                        upload.state.status === 'error' ? 'text-destructive' :
-                        'text-primary'
-                      }`} />
+                      {upload.state.status === 'extracting' ? (
+                        <Brain className="w-4 h-4 text-primary animate-pulse" />
+                      ) : (
+                        <Icon className={`w-4 h-4 ${
+                          upload.state.status === 'complete' ? 'text-success' :
+                          upload.state.status === 'error' ? 'text-destructive' :
+                          'text-primary'
+                        }`} />
+                      )}
                     </div>
                     
                     <div className="flex-1 min-w-0">
@@ -397,19 +554,28 @@ const UploadPanel = () => {
                         <p className="text-sm font-mono text-foreground truncate">
                           {upload.file.name}
                         </p>
-                        {upload.state.parsedData && (
-                          <span className="text-xs text-muted-foreground">
-                            {upload.state.parsedData.type.replace('_', ' ')}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {upload.state.aiExtracted && (
+                            <span className="flex items-center gap-1 text-xs text-primary">
+                              <Sparkles className="w-3 h-3" />
+                              AI
+                            </span>
+                          )}
+                          {upload.state.parsedData && (
+                            <span className="text-xs text-muted-foreground">
+                              {upload.state.parsedData.type.replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-secondary rounded-full h-1.5">
+                      <div className="flex-1 bg-secondary rounded-full h-1.5">
                           <motion.div
                             className={`h-1.5 rounded-full ${
                               upload.state.status === 'complete' ? 'bg-success' :
                               upload.state.status === 'error' ? 'bg-destructive' :
+                              upload.state.status === 'extracting' ? 'bg-gradient-to-r from-primary to-accent' :
                               'bg-primary'
                             }`}
                             initial={{ width: 0 }}
