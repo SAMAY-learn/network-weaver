@@ -3,6 +3,10 @@ import { Users, AlertTriangle, TrendingUp, Target } from 'lucide-react';
 import { useFraudClusters, FraudCluster } from '@/hooks/useFraudClusters';
 import { Skeleton } from '@/components/ui/skeleton';
 
+interface ClusterAnalysisProps {
+  onSelectCluster?: (clusterId: string) => void;
+}
+
 // Mock data for when database is empty
 const mockClusters: FraudCluster[] = [
   {
@@ -52,7 +56,7 @@ const mockClusters: FraudCluster[] = [
   },
 ];
 
-const ClusterAnalysis = () => {
+const ClusterAnalysis = ({ onSelectCluster }: ClusterAnalysisProps) => {
   const { data: clusters, isLoading, error } = useFraudClusters();
 
   // Use real data if available, otherwise use mock data
@@ -97,6 +101,7 @@ const ClusterAnalysis = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
             whileHover={{ scale: 1.01 }}
+            onClick={() => onSelectCluster?.(cluster.id)}
             className={`glass-card p-4 rounded-xl border transition-all cursor-pointer ${
               cluster.threat === 'high' 
                 ? 'border-destructive/30 hover:border-destructive/50' 
