@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
-import { Search, Bell, User, Filter } from 'lucide-react';
+import { Search, Bell, User, Filter, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
+import { useAuth } from '@/hooks/useAuth';
 
 interface HeaderProps {
   title: string;
@@ -8,6 +9,8 @@ interface HeaderProps {
 }
 
 const Header = ({ title, subtitle }: HeaderProps) => {
+  const { user, signOut } = useAuth();
+
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
@@ -44,12 +47,15 @@ const Header = ({ title, subtitle }: HeaderProps) => {
         {/* User */}
         <div className="flex items-center gap-3 pl-4 border-l border-border">
           <div className="text-right">
-            <p className="text-sm font-medium text-foreground">Inspector Singh</p>
-            <p className="text-xs text-muted-foreground">Cyber Cell, Ranchi</p>
+            <p className="text-sm font-medium text-foreground">{user?.user_metadata?.full_name || 'Officer'}</p>
+            <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
           <div className="w-10 h-10 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
             <User className="w-5 h-5 text-primary" />
           </div>
+          <Button variant="ghost" size="icon" onClick={signOut} title="Sign out">
+            <LogOut className="w-5 h-5" />
+          </Button>
         </div>
       </div>
     </motion.header>
