@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Suspect } from '@/hooks/useSuspects';
-import { MapPin, AlertTriangle, Loader2, X } from 'lucide-react';
+import { MapPin, AlertTriangle, Loader2, X, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from './ui/button';
@@ -53,35 +53,41 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Fetch Mapbox token from Cloud
-  useEffect(() => {
-    const fetchToken = async () => {
-      try {
+  const fetchToken = async (isRetry = false) => {
+    try {
+      if (isRetry) {
+        setIsRetrying(true);
+      } else {
         setIsLoading(true);
-        setError(null);
-        
-        const { data, error: fnError } = await supabase.functions.invoke('get-mapbox-token');
-        
-        if (fnError) {
-          console.error('Error fetching Mapbox token:', fnError);
-          setError('Failed to load map configuration');
-          return;
-        }
-        
-        if (data?.token) {
-          setMapboxToken(data.token);
-        } else if (data?.error) {
-          setError(data.error);
-        }
-      } catch (err) {
-        console.error('Error fetching Mapbox token:', err);
-        setError('Failed to load map configuration');
-      } finally {
-        setIsLoading(false);
       }
-    };
+      setError(null);
+      
+      const { data, error: fnError } = await supabase.functions.invoke('get-mapbox-token');
+      
+      if (fnError) {
+        console.error('Error fetching Mapbox token:', fnError);
+        setError('Failed to load map configuration');
+        return;
+      }
+      
+      if (data?.token) {
+        setMapboxToken(data.token);
+      } else if (data?.error) {
+        setError(data.error);
+      }
+    } catch (err) {
+      console.error('Error fetching Mapbox token:', err);
+      setError('Failed to load map configuration');
+    } finally {
+      setIsLoading(false);
+      setIsRetrying(false);
+    }
+  };
 
+  useEffect(() => {
     fetchToken();
   }, []);
 
@@ -322,11 +328,23 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
               <p className="text-sm text-muted-foreground mt-1">{error}</p>
             </div>
           </div>
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-4 h-4" />
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fetchToken(true)}
+              disabled={isRetrying}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+              Retry
             </Button>
-          )}
+            {onClose && (
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -350,11 +368,23 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
               </p>
             </div>
           </div>
-          {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="w-4 h-4" />
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fetchToken(true)}
+              disabled={isRetrying}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+              Retry
             </Button>
-          )}
+            {onClose && (
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </motion.div>
     );
