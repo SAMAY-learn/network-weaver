@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
+  Search,
   Filter, 
   Users, 
   MapPin, 
@@ -16,7 +17,7 @@ import {
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Skeleton } from './ui/skeleton';
-import { useSuspects } from '@/hooks/useSuspects';
+import { useSuspects, Suspect } from '@/hooks/useSuspects';
 import SuspectDetailModal from './SuspectDetailModal';
 import SuspectMap from './SuspectMap';
 import { toast } from '@/hooks/use-toast';
@@ -26,11 +27,83 @@ type ThreatLevel = 'all' | 'high' | 'medium' | 'low';
 
 const SuspectsPanel = () => {
   const { data: suspects, isLoading } = useSuspects();
+  const [searchQuery, setSearchQuery] = useState('');
   const [threatFilter, setThreatFilter] = useState<ThreatLevel>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedSuspectId, setSelectedSuspectId] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(true);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Generate autocomplete suggestions based on search query
+  const suggestions = useMemo(() => {
+    if (!suspects || !searchQuery.trim()) return [];
+    
+    const query = searchQuery.toLowerCase();
+    const matches: Array<{ type: 'name' | 'alias' | 'location'; value: string; suspect: Suspect }> = [];
+    
+    suspects.forEach(suspect => {
+      if (suspect.name.toLowerCase().includes(query)) {
+        matches.push({ type: 'name', value: suspect.name, suspect });
+      }
+      if (suspect.alias?.toLowerCase().includes(query)) {
+        matches.push({ type: 'alias', value: suspect.alias, suspect });
+      }
+      if (suspect.location?.toLowerCase().includes(query) && 
+          !matches.some(m => m.suspect.id === suspect.id && m.type === 'location')) {
+        matches.push({ type: 'location', value: suspect.location, suspect });
+      }
+    });
+    
+    // Remove duplicates and limit to 8 suggestions
+    const unique = matches.filter((match, index, self) => 
+      index === self.findIndex(m => m.value === match.value && m.type === match.type)
+    );
+    return unique.slice(0, 8);
+  }, [suspects, searchQuery]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      e.preventDefault();
+      const selected = suggestions[highlightedIndex];
+      setSearchQuery(selected.value);
+      setShowSuggestions(false);
+      setHighlightedIndex(-1);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setHighlightedIndex(-1);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: typeof suggestions[0]) => {
+    setSearchQuery(suggestion.value);
+    setShowSuggestions(false);
+    setHighlightedIndex(-1);
+    inputRef.current?.focus();
+  };
 
   // Get unique locations for filter dropdown
   const locations = useMemo(() => {
@@ -41,11 +114,19 @@ const SuspectsPanel = () => {
     return [...new Set(locs)].sort();
   }, [suspects]);
 
-  // Filter suspects based on filters
+  // Filter suspects based on search and filters
   const filteredSuspects = useMemo(() => {
     if (!suspects) return [];
     
     return suspects.filter(suspect => {
+      // Search filter
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch = !searchQuery || 
+        suspect.name.toLowerCase().includes(searchLower) ||
+        (suspect.alias?.toLowerCase().includes(searchLower)) ||
+        (suspect.location?.toLowerCase().includes(searchLower)) ||
+        (suspect.notes?.toLowerCase().includes(searchLower));
+
       // Threat level filter
       const matchesThreat = threatFilter === 'all' || 
         suspect.threat_level === threatFilter;
@@ -54,16 +135,17 @@ const SuspectsPanel = () => {
       const matchesLocation = locationFilter === 'all' || 
         suspect.location === locationFilter;
 
-      return matchesThreat && matchesLocation;
+      return matchesSearch && matchesThreat && matchesLocation;
     });
-  }, [suspects, threatFilter, locationFilter]);
+  }, [suspects, searchQuery, threatFilter, locationFilter]);
 
   const clearFilters = () => {
+    setSearchQuery('');
     setThreatFilter('all');
     setLocationFilter('all');
   };
 
-  const hasActiveFilters = threatFilter !== 'all' || locationFilter !== 'all';
+  const hasActiveFilters = searchQuery || threatFilter !== 'all' || locationFilter !== 'all';
 
   const exportToCSV = () => {
     if (!filteredSuspects.length) {
@@ -240,6 +322,97 @@ const SuspectsPanel = () => {
                 )}
               </Button>
             </div>
+          </div>
+
+          {/* Search Bar with Autocomplete */}
+          <div className="relative" ref={searchRef}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSuggestions(true);
+                setHighlightedIndex(-1);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onKeyDown={handleKeyDown}
+              placeholder="Search by name, alias, location, or notes..."
+              className="w-full pl-10 pr-10 py-2.5 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setShowSuggestions(false);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded z-10"
+              >
+                <X className="w-3 h-3 text-muted-foreground" />
+              </button>
+            )}
+
+            {/* Autocomplete Dropdown */}
+            <AnimatePresence>
+              {showSuggestions && suggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden"
+                >
+                  <ul className="py-1 max-h-64 overflow-y-auto">
+                    {suggestions.map((suggestion, index) => (
+                      <li
+                        key={`${suggestion.type}-${suggestion.value}-${suggestion.suspect.id}`}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        onMouseEnter={() => setHighlightedIndex(index)}
+                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                          highlightedIndex === index 
+                            ? 'bg-accent text-accent-foreground' 
+                            : 'hover:bg-accent/50'
+                        }`}
+                      >
+                        <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${
+                          suggestion.suspect.threat_level === 'high' ? 'bg-destructive/20 text-destructive' :
+                          suggestion.suspect.threat_level === 'medium' ? 'bg-warning/20 text-warning' :
+                          'bg-success/20 text-success'
+                        }`}>
+                          <span className="text-sm font-bold">
+                            {suggestion.suspect.name.charAt(0)}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground truncate">
+                              {suggestion.value}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                              {suggestion.type}
+                            </Badge>
+                          </div>
+                          {suggestion.type !== 'name' && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {suggestion.suspect.name}
+                            </p>
+                          )}
+                        </div>
+                        {suggestion.suspect.threat_level && (
+                          <Badge 
+                            variant={suggestion.suspect.threat_level === 'high' ? 'destructive' : 'secondary'}
+                            className="text-[10px] shrink-0"
+                          >
+                            {suggestion.suspect.threat_level}
+                          </Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Filter Panel */}
