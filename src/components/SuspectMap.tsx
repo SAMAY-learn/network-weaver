@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Suspect } from '@/hooks/useSuspects';
-import { MapPin, AlertTriangle, Loader2, X, RefreshCw, Key } from 'lucide-react';
+import { MapPin, AlertTriangle, Loader2, X, RefreshCw, Save } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { toast } from 'sonner';
 
 // Jharkhand district coordinates
 const JHARKHAND_LOCATIONS: Record<string, [number, number]> = {
@@ -54,8 +56,10 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
   const [error, setError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch Mapbox token from Cloud
+  // Fetch Mapbox token from database
   const fetchToken = async (isRetry = false) => {
     try {
       if (isRetry) {
@@ -65,18 +69,20 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
       }
       setError(null);
       
-      const { data, error: fnError } = await supabase.functions.invoke('get-mapbox-token');
+      const { data, error: dbError } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'MAPBOX_PUBLIC_TOKEN')
+        .maybeSingle();
       
-      if (fnError) {
-        console.error('Error fetching Mapbox token:', fnError);
+      if (dbError) {
+        console.error('Error fetching Mapbox token:', dbError);
         setError('Failed to load map configuration');
         return;
       }
       
-      if (data?.token) {
-        setMapboxToken(data.token);
-      } else if (data?.error) {
-        setError(data.error);
+      if (data?.value) {
+        setMapboxToken(data.value);
       }
     } catch (err) {
       console.error('Error fetching Mapbox token:', err);
@@ -84,6 +90,39 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
     } finally {
       setIsLoading(false);
       setIsRetrying(false);
+    }
+  };
+
+  // Save token to database
+  const saveToken = async () => {
+    if (!tokenInput.trim()) {
+      toast.error('Please enter a valid Mapbox token');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { error: upsertError } = await supabase
+        .from('app_settings')
+        .upsert(
+          { key: 'MAPBOX_PUBLIC_TOKEN', value: tokenInput.trim() },
+          { onConflict: 'key' }
+        );
+
+      if (upsertError) {
+        console.error('Error saving token:', upsertError);
+        toast.error('Failed to save token');
+        return;
+      }
+
+      toast.success('Mapbox token saved successfully');
+      setMapboxToken(tokenInput.trim());
+      setTokenInput('');
+    } catch (err) {
+      console.error('Error saving token:', err);
+      toast.error('Failed to save token');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -350,7 +389,7 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
     );
   }
 
-  // No token state
+  // No token state - show input form
   if (!mapboxToken) {
     return (
       <motion.div
@@ -365,48 +404,49 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
               <div>
                 <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
                 <p className="text-sm text-muted-foreground">
-                  A Mapbox public token is needed to display the map.
+                  Enter your Mapbox public token to display the map.
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="default" 
-                size="sm" 
-                onClick={() => window.open('https://lovable.dev/projects/' + import.meta.env.VITE_SUPABASE_PROJECT_ID + '/settings/secrets', '_blank')}
-                className="gap-2"
-              >
-                <Key className="w-4 h-4" />
-                Add Token
+            {onClose && (
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-4 h-4" />
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => fetchToken(true)}
-                disabled={isRetrying}
-                className="gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
-                Retry
-              </Button>
-              {onClose && (
-                <Button variant="ghost" size="icon" onClick={onClose}>
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+            )}
           </div>
           
-          {/* Instructions to add token */}
+          {/* Token input form */}
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              placeholder="pk.eyJ1Ijoi..."
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              className="flex-1 font-mono text-sm"
+              onKeyDown={(e) => e.key === 'Enter' && saveToken()}
+            />
+            <Button 
+              onClick={saveToken}
+              disabled={isSaving || !tokenInput.trim()}
+              className="gap-2"
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Save Token
+            </Button>
+          </div>
+          
+          {/* Instructions */}
           <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2">
-            <p className="font-medium text-foreground">How to add your Mapbox token:</p>
+            <p className="font-medium text-foreground">How to get your Mapbox token:</p>
             <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
               <li>Go to <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">mapbox.com</a> and create an account</li>
-              <li>Find your public token in the Tokens section of your dashboard</li>
-              <li>In Lovable, go to <span className="font-mono bg-background px-1 rounded">Settings → Cloud → Secrets</span></li>
-              <li>Add a new secret named <span className="font-mono bg-background px-1 rounded">MAPBOX_PUBLIC_TOKEN</span></li>
-              <li>Paste your Mapbox public token as the value</li>
-              <li>Click "Retry" above to load the map</li>
+              <li>Navigate to your Account → Tokens page</li>
+              <li>Copy your default public token (starts with <span className="font-mono bg-background px-1 rounded">pk.</span>)</li>
+              <li>Paste it above and click "Save Token"</li>
             </ol>
           </div>
         </div>
