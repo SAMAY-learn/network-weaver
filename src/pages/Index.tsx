@@ -47,6 +47,15 @@ const mockKingpins: Kingpin[] = [
     location: 'Jamtara, JH',
     lastActive: '2 hours ago',
     fraudAmount: '1.2Cr',
+    status: 'active_investigation',
+    priority: 'critical',
+    assignedOfficer: 'Insp. R. Kumar',
+    influenceScore: 92,
+    recentActivities: [
+      { action: 'New SIM detected', time: '1h ago' },
+      { action: 'Transaction flagged', time: '2h ago' },
+      { action: 'Location changed', time: '3h ago' },
+    ],
   },
   {
     id: 'K2',
@@ -60,6 +69,14 @@ const mockKingpins: Kingpin[] = [
     location: 'Deoghar, JH',
     lastActive: '5 hours ago',
     fraudAmount: '89L',
+    status: 'active_investigation',
+    priority: 'high',
+    assignedOfficer: 'SI P. Sharma',
+    influenceScore: 78,
+    recentActivities: [
+      { action: 'Transaction flagged', time: '2h ago' },
+      { action: 'Call pattern anomaly', time: '4h ago' },
+    ],
   },
   {
     id: 'K3',
@@ -73,6 +90,14 @@ const mockKingpins: Kingpin[] = [
     location: 'Jamtara, JH',
     lastActive: '1 day ago',
     fraudAmount: '56L',
+    status: 'under_surveillance',
+    priority: 'high',
+    assignedOfficer: 'Insp. A. Singh',
+    influenceScore: 71,
+    recentActivities: [
+      { action: 'New SIM detected', time: '6h ago' },
+      { action: 'Network activity', time: '12h ago' },
+    ],
   },
   {
     id: 'K4',
@@ -86,6 +111,13 @@ const mockKingpins: Kingpin[] = [
     location: 'Ranchi, JH',
     lastActive: '3 hours ago',
     fraudAmount: '34L',
+    status: 'under_surveillance',
+    priority: 'medium',
+    assignedOfficer: 'SI M. Verma',
+    influenceScore: 58,
+    recentActivities: [
+      { action: 'Location changed', time: '3h ago' },
+    ],
   },
   {
     id: 'K5',
@@ -99,6 +131,13 @@ const mockKingpins: Kingpin[] = [
     location: 'Dhanbad, JH',
     lastActive: '6 hours ago',
     fraudAmount: '28L',
+    status: 'monitoring',
+    priority: 'medium',
+    assignedOfficer: 'Insp. S. Yadav',
+    influenceScore: 45,
+    recentActivities: [
+      { action: 'Transaction flagged', time: '5h ago' },
+    ],
   },
 ];
 
@@ -330,29 +369,86 @@ const Index = () => {
           )}
 
           {activeTab === 'kingpins' && (
-            <div className="grid grid-cols-2 gap-6">
-              {kingpinsLoading ? (
-                <>
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-48" />
-                  ))}
-                </>
-              ) : (
-                displayKingpins.map((kingpin, index) => (
-                  <motion.div
-                    key={kingpin.id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.1 }}
-                  >
-                    <KingpinCard
-                      kingpin={kingpin}
-                      rank={index + 1}
-                      onClick={() => setSelectedSuspectId(kingpin.id)}
-                    />
-                  </motion.div>
-                ))
-              )}
+            <div className="space-y-6">
+              {/* Header Stats */}
+              <div className="grid grid-cols-4 gap-4">
+                <div className="glass-card rounded-xl p-4 border border-destructive/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-destructive/20 flex items-center justify-center">
+                      <AlertTriangle className="w-5 h-5 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-destructive">
+                        {displayKingpins.filter(k => k.priority === 'critical').length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Critical Priority</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-warning/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-warning/20 flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-warning" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-warning">
+                        {displayKingpins.filter(k => k.status === 'active_investigation').length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Under Investigation</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-primary/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-primary">{displayKingpins.length}</p>
+                      <p className="text-xs text-muted-foreground">Total Kingpins</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass-card rounded-xl p-4 border border-cyber-cyan/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-cyber-cyan/20 flex items-center justify-center">
+                      <IndianRupee className="w-5 h-5 text-cyber-cyan" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-cyber-cyan">
+                        {displayKingpins.reduce((sum, k) => sum + k.connections, 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Total Connections</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kingpins Grid */}
+              <div className="grid grid-cols-2 gap-6">
+                {kingpinsLoading ? (
+                  <>
+                    {[1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="h-72" />
+                    ))}
+                  </>
+                ) : (
+                  displayKingpins.map((kingpin, index) => (
+                    <motion.div
+                      key={kingpin.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <KingpinCard
+                        kingpin={kingpin}
+                        rank={index + 1}
+                        onClick={() => setSelectedSuspectId(kingpin.id)}
+                      />
+                    </motion.div>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
