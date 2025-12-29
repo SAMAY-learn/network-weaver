@@ -1,22 +1,9 @@
 import { motion } from 'framer-motion';
 import { AlertTriangle, Phone, CreditCard, Smartphone, MapPin } from 'lucide-react';
-
-interface KingpinData {
-  id: string;
-  name: string;
-  alias: string;
-  threatScore: number;
-  connections: number;
-  simCards: number;
-  accounts: number;
-  devices: number;
-  location: string;
-  lastActive: string;
-  fraudAmount: string;
-}
+import { Kingpin } from '@/hooks/useKingpins';
 
 interface KingpinCardProps {
-  kingpin: KingpinData;
+  kingpin: Kingpin;
   rank: number;
   delay?: number;
 }

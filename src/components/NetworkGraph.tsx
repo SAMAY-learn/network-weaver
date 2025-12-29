@@ -1,85 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNetworkGraph, NetworkNode, NetworkEdge } from '@/hooks/useNetworkGraph';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface Node {
-  id: string;
-  type: 'suspect' | 'sim' | 'device' | 'account' | 'ip';
-  label: string;
-  x: number;
-  y: number;
-  threat: 'high' | 'medium' | 'low';
-  connections: number;
-}
-
-interface Edge {
-  from: string;
-  to: string;
-  type: 'call' | 'transaction' | 'shared_device' | 'shared_ip';
-}
-
-const generateMockNetwork = (): { nodes: Node[]; edges: Edge[] } => {
-  const nodes: Node[] = [
-    // Kingpins
-    { id: 'K1', type: 'suspect', label: 'KINGPIN-001', x: 400, y: 300, threat: 'high', connections: 12 },
-    { id: 'K2', type: 'suspect', label: 'KINGPIN-002', x: 600, y: 250, threat: 'high', connections: 9 },
-    
-    // Suspects
-    { id: 'S1', type: 'suspect', label: 'SUSPECT-A', x: 250, y: 200, threat: 'medium', connections: 5 },
-    { id: 'S2', type: 'suspect', label: 'SUSPECT-B', x: 550, y: 400, threat: 'medium', connections: 4 },
-    { id: 'S3', type: 'suspect', label: 'SUSPECT-C', x: 700, y: 350, threat: 'low', connections: 3 },
-    { id: 'S4', type: 'suspect', label: 'SUSPECT-D', x: 300, y: 420, threat: 'medium', connections: 6 },
-    
-    // SIM Cards
-    { id: 'SIM1', type: 'sim', label: '+91-XXX-4521', x: 180, y: 300, threat: 'medium', connections: 3 },
-    { id: 'SIM2', type: 'sim', label: '+91-XXX-8834', x: 480, y: 180, threat: 'high', connections: 4 },
-    { id: 'SIM3', type: 'sim', label: '+91-XXX-2290', x: 720, y: 220, threat: 'medium', connections: 2 },
-    { id: 'SIM4', type: 'sim', label: '+91-XXX-6671', x: 350, y: 150, threat: 'low', connections: 2 },
-    
-    // Devices
-    { id: 'D1', type: 'device', label: 'IMEI-8821', x: 150, y: 400, threat: 'medium', connections: 3 },
-    { id: 'D2', type: 'device', label: 'IMEI-3394', x: 500, y: 480, threat: 'high', connections: 5 },
-    { id: 'D3', type: 'device', label: 'IMEI-7756', x: 650, y: 150, threat: 'low', connections: 2 },
-    
-    // Bank Accounts
-    { id: 'A1', type: 'account', label: 'MULE-ACC-01', x: 200, y: 480, threat: 'high', connections: 4 },
-    { id: 'A2', type: 'account', label: 'MULE-ACC-02', x: 420, y: 520, threat: 'high', connections: 3 },
-    { id: 'A3', type: 'account', label: 'MULE-ACC-03', x: 750, y: 420, threat: 'medium', connections: 2 },
-    
-    // IP Addresses
-    { id: 'IP1', type: 'ip', label: '192.168.X.X', x: 100, y: 250, threat: 'medium', connections: 2 },
-    { id: 'IP2', type: 'ip', label: '10.0.X.X', x: 780, y: 300, threat: 'low', connections: 2 },
-  ];
-
-  const edges: Edge[] = [
-    { from: 'K1', to: 'S1', type: 'call' },
-    { from: 'K1', to: 'S2', type: 'call' },
-    { from: 'K1', to: 'S4', type: 'call' },
-    { from: 'K1', to: 'SIM2', type: 'shared_device' },
-    { from: 'K1', to: 'A1', type: 'transaction' },
-    { from: 'K1', to: 'A2', type: 'transaction' },
-    { from: 'K2', to: 'S2', type: 'call' },
-    { from: 'K2', to: 'S3', type: 'call' },
-    { from: 'K2', to: 'SIM3', type: 'shared_device' },
-    { from: 'K2', to: 'D3', type: 'shared_device' },
-    { from: 'K2', to: 'A3', type: 'transaction' },
-    { from: 'S1', to: 'SIM1', type: 'shared_device' },
-    { from: 'S1', to: 'SIM4', type: 'shared_device' },
-    { from: 'S1', to: 'D1', type: 'shared_device' },
-    { from: 'S1', to: 'IP1', type: 'shared_ip' },
-    { from: 'S2', to: 'D2', type: 'shared_device' },
-    { from: 'S2', to: 'A2', type: 'transaction' },
-    { from: 'S3', to: 'IP2', type: 'shared_ip' },
-    { from: 'S4', to: 'D1', type: 'shared_device' },
-    { from: 'S4', to: 'A1', type: 'transaction' },
-    { from: 'SIM1', to: 'D1', type: 'shared_device' },
-    { from: 'SIM2', to: 'D2', type: 'shared_device' },
-    { from: 'D2', to: 'A2', type: 'transaction' },
-  ];
-
-  return { nodes, edges };
-};
-
-const getNodeColor = (type: Node['type'], threat: Node['threat']) => {
+const getNodeColor = (type: NetworkNode['type'], threat: NetworkNode['threat']) => {
   const colors = {
     suspect: {
       high: '#ef4444',
@@ -110,7 +34,7 @@ const getNodeColor = (type: Node['type'], threat: Node['threat']) => {
   return colors[type][threat];
 };
 
-const getNodeIcon = (type: Node['type']) => {
+const getNodeIcon = (type: NetworkNode['type']) => {
   switch (type) {
     case 'suspect': return '👤';
     case 'sim': return '📱';
@@ -120,12 +44,63 @@ const getNodeIcon = (type: Node['type']) => {
   }
 };
 
+// Mock data for when database is empty
+const mockNodes: NetworkNode[] = [
+  { id: 'K1', type: 'suspect', label: 'KINGPIN-001', x: 400, y: 300, threat: 'high', connections: 12 },
+  { id: 'K2', type: 'suspect', label: 'KINGPIN-002', x: 600, y: 250, threat: 'high', connections: 9 },
+  { id: 'S1', type: 'suspect', label: 'SUSPECT-A', x: 250, y: 200, threat: 'medium', connections: 5 },
+  { id: 'S2', type: 'suspect', label: 'SUSPECT-B', x: 550, y: 400, threat: 'medium', connections: 4 },
+  { id: 'S3', type: 'suspect', label: 'SUSPECT-C', x: 700, y: 350, threat: 'low', connections: 3 },
+  { id: 'S4', type: 'suspect', label: 'SUSPECT-D', x: 300, y: 420, threat: 'medium', connections: 6 },
+  { id: 'SIM1', type: 'sim', label: '+91-XXX-4521', x: 180, y: 300, threat: 'medium', connections: 3 },
+  { id: 'SIM2', type: 'sim', label: '+91-XXX-8834', x: 480, y: 180, threat: 'high', connections: 4 },
+  { id: 'SIM3', type: 'sim', label: '+91-XXX-2290', x: 720, y: 220, threat: 'medium', connections: 2 },
+  { id: 'SIM4', type: 'sim', label: '+91-XXX-6671', x: 350, y: 150, threat: 'low', connections: 2 },
+  { id: 'D1', type: 'device', label: 'IMEI-8821', x: 150, y: 400, threat: 'medium', connections: 3 },
+  { id: 'D2', type: 'device', label: 'IMEI-3394', x: 500, y: 480, threat: 'high', connections: 5 },
+  { id: 'D3', type: 'device', label: 'IMEI-7756', x: 650, y: 150, threat: 'low', connections: 2 },
+  { id: 'A1', type: 'account', label: 'MULE-ACC-01', x: 200, y: 480, threat: 'high', connections: 4 },
+  { id: 'A2', type: 'account', label: 'MULE-ACC-02', x: 420, y: 520, threat: 'high', connections: 3 },
+  { id: 'A3', type: 'account', label: 'MULE-ACC-03', x: 750, y: 420, threat: 'medium', connections: 2 },
+  { id: 'IP1', type: 'ip', label: '192.168.X.X', x: 100, y: 250, threat: 'medium', connections: 2 },
+  { id: 'IP2', type: 'ip', label: '10.0.X.X', x: 780, y: 300, threat: 'low', connections: 2 },
+];
+
+const mockEdges: NetworkEdge[] = [
+  { from: 'K1', to: 'S1', type: 'call' },
+  { from: 'K1', to: 'S2', type: 'call' },
+  { from: 'K1', to: 'S4', type: 'call' },
+  { from: 'K1', to: 'SIM2', type: 'shared_device' },
+  { from: 'K1', to: 'A1', type: 'transaction' },
+  { from: 'K1', to: 'A2', type: 'transaction' },
+  { from: 'K2', to: 'S2', type: 'call' },
+  { from: 'K2', to: 'S3', type: 'call' },
+  { from: 'K2', to: 'SIM3', type: 'shared_device' },
+  { from: 'K2', to: 'D3', type: 'shared_device' },
+  { from: 'K2', to: 'A3', type: 'transaction' },
+  { from: 'S1', to: 'SIM1', type: 'shared_device' },
+  { from: 'S1', to: 'SIM4', type: 'shared_device' },
+  { from: 'S1', to: 'D1', type: 'shared_device' },
+  { from: 'S1', to: 'IP1', type: 'shared_ip' },
+  { from: 'S2', to: 'D2', type: 'shared_device' },
+  { from: 'S2', to: 'A2', type: 'transaction' },
+  { from: 'S3', to: 'IP2', type: 'shared_ip' },
+  { from: 'S4', to: 'D1', type: 'shared_device' },
+  { from: 'S4', to: 'A1', type: 'transaction' },
+  { from: 'SIM1', to: 'D1', type: 'shared_device' },
+  { from: 'SIM2', to: 'D2', type: 'shared_device' },
+  { from: 'D2', to: 'A2', type: 'transaction' },
+];
+
 const NetworkGraph = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [network] = useState(generateMockNetwork);
-  const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const { data: networkData, isLoading } = useNetworkGraph();
+  const [selectedNode, setSelectedNode] = useState<NetworkNode | null>(null);
   const animationRef = useRef<number>();
+
+  // Use real data if available, otherwise use mock data
+  const nodes = networkData?.nodes.length ? networkData.nodes : mockNodes;
+  const edges = networkData?.edges.length ? networkData.edges : mockEdges;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -152,9 +127,9 @@ const NetworkGraph = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       // Draw edges with animation
-      network.edges.forEach((edge, index) => {
-        const fromNode = network.nodes.find(n => n.id === edge.from);
-        const toNode = network.nodes.find(n => n.id === edge.to);
+      edges.forEach((edge, index) => {
+        const fromNode = nodes.find(n => n.id === edge.from);
+        const toNode = nodes.find(n => n.id === edge.to);
         if (!fromNode || !toNode) return;
 
         const scaleX = canvas.width / 900;
@@ -192,7 +167,7 @@ const NetworkGraph = () => {
       });
 
       // Draw nodes
-      network.nodes.forEach((node) => {
+      nodes.forEach((node) => {
         const scaleX = canvas.width / 900;
         const scaleY = canvas.height / 600;
         const x = node.x * scaleX;
@@ -244,7 +219,7 @@ const NetworkGraph = () => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [network]);
+  }, [nodes, edges]);
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -256,7 +231,7 @@ const NetworkGraph = () => {
     const scaleX = canvas.width / 900;
     const scaleY = canvas.height / 600;
 
-    const clickedNode = network.nodes.find(node => {
+    const clickedNode = nodes.find(node => {
       const nodeX = node.x * scaleX;
       const nodeY = node.y * scaleY;
       const dist = Math.sqrt((x - nodeX) ** 2 + (y - nodeY) ** 2);
@@ -265,6 +240,17 @@ const NetworkGraph = () => {
 
     setSelectedNode(clickedNode || null);
   };
+
+  if (isLoading) {
+    return (
+      <div className="relative w-full h-full min-h-[500px] network-grid rounded-xl overflow-hidden flex items-center justify-center">
+        <div className="space-y-4 text-center">
+          <Skeleton className="h-8 w-48 mx-auto" />
+          <Skeleton className="h-4 w-32 mx-auto" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full min-h-[500px] network-grid rounded-xl overflow-hidden">
@@ -276,7 +262,7 @@ const NetworkGraph = () => {
       
       {/* Node Labels Overlay */}
       <div className="absolute inset-0 pointer-events-none">
-        {network.nodes.map((node) => (
+        {nodes.map((node) => (
           <motion.div
             key={node.id}
             initial={{ opacity: 0, scale: 0.8 }}
@@ -349,7 +335,7 @@ const NetworkGraph = () => {
           <div className="text-xs text-muted-foreground space-y-1">
             <div>Type: <span className="text-foreground capitalize">{selectedNode.type}</span></div>
             <div>Connections: <span className="text-foreground">{selectedNode.connections}</span></div>
-            <div>ID: <span className="text-foreground">{selectedNode.id}</span></div>
+            <div>ID: <span className="text-foreground">{selectedNode.id.slice(0, 8)}...</span></div>
           </div>
         </motion.div>
       )}

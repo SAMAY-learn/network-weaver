@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -18,8 +18,14 @@ import StatsCard from '@/components/StatsCard';
 import KingpinCard from '@/components/KingpinCard';
 import UploadPanel from '@/components/UploadPanel';
 import ClusterAnalysis from '@/components/ClusterAnalysis';
+import { useDashboardStats } from '@/hooks/useDashboardStats';
+import { useKingpins, Kingpin } from '@/hooks/useKingpins';
+import { Skeleton } from '@/components/ui/skeleton';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
-const mockKingpins = [
+// Mock kingpins for when database is empty
+const mockKingpins: Kingpin[] = [
   {
     id: 'K1',
     name: 'Rajan Kumar',
@@ -87,8 +93,50 @@ const mockKingpins = [
   },
 ];
 
+const formatFraudValue = (amount: number): string => {
+  if (amount >= 10000000) {
+    return `₹${(amount / 10000000).toFixed(1)}Cr`;
+  } else if (amount >= 100000) {
+    return `₹${(amount / 100000).toFixed(0)}L`;
+  } else if (amount >= 1000) {
+    return `₹${(amount / 1000).toFixed(0)}K`;
+  }
+  return `₹${amount}`;
+};
+
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const queryClient = useQueryClient();
+  
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: kingpins, isLoading: kingpinsLoading } = useKingpins();
+
+  // Use real data if available, otherwise use mock data
+  const displayKingpins = kingpins?.length ? kingpins : mockKingpins;
+
+  // Set up real-time subscriptions for stats
+  useEffect(() => {
+    const channels = [
+      supabase.channel('stats-suspects').on('postgres_changes', { event: '*', schema: 'public', table: 'suspects' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      }),
+      supabase.channel('stats-sims').on('postgres_changes', { event: '*', schema: 'public', table: 'sim_cards' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      }),
+      supabase.channel('stats-accounts').on('postgres_changes', { event: '*', schema: 'public', table: 'mule_accounts' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      }),
+      supabase.channel('stats-devices').on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      }),
+    ];
+
+    channels.forEach(channel => channel.subscribe());
+
+    return () => {
+      channels.forEach(channel => supabase.removeChannel(channel));
+    };
+  }, [queryClient]);
 
   const headerConfig: Record<string, { title: string; subtitle: string }> = {
     dashboard: { title: 'Intelligence Dashboard', subtitle: 'Real-time cybercrime network analysis' },
@@ -97,6 +145,15 @@ const Index = () => {
     suspects: { title: 'Suspect Database', subtitle: 'All identified suspects and their profiles' },
     upload: { title: 'Data Ingestion', subtitle: 'Upload CDR, FIR, and transaction records' },
     reports: { title: 'Intelligence Reports', subtitle: 'Generated analysis and case files' },
+  };
+
+  // Display values - use real data or show mock values
+  const displayStats = {
+    totalSuspects: stats?.totalSuspects || 847,
+    activeSims: stats?.activeSims || 2341,
+    muleAccounts: stats?.muleAccounts || 512,
+    devicesTracked: stats?.devicesTracked || 1089,
+    estFraudValue: stats?.estFraudValue || 48000000,
   };
 
   return (
@@ -114,48 +171,58 @@ const Index = () => {
             <div className="space-y-6">
               {/* Stats Row */}
               <div className="grid grid-cols-5 gap-4">
-                <StatsCard
-                  title="Total Suspects"
-                  value="847"
-                  change="+12%"
-                  changeType="increase"
-                  icon={Users}
-                  delay={0}
-                />
-                <StatsCard
-                  title="Active SIMs"
-                  value="2,341"
-                  change="+8%"
-                  changeType="increase"
-                  icon={Phone}
-                  delay={0.1}
-                />
-                <StatsCard
-                  title="Mule Accounts"
-                  value="512"
-                  change="+23%"
-                  changeType="increase"
-                  icon={CreditCard}
-                  variant="warning"
-                  delay={0.2}
-                />
-                <StatsCard
-                  title="Devices Tracked"
-                  value="1,089"
-                  change="+5%"
-                  changeType="increase"
-                  icon={Smartphone}
-                  delay={0.3}
-                />
-                <StatsCard
-                  title="Est. Fraud Value"
-                  value="₹4.8Cr"
-                  change="+18%"
-                  changeType="increase"
-                  icon={IndianRupee}
-                  variant="threat"
-                  delay={0.4}
-                />
+                {statsLoading ? (
+                  <>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Skeleton key={i} className="h-32" />
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <StatsCard
+                      title="Total Suspects"
+                      value={displayStats.totalSuspects.toLocaleString()}
+                      change="+12%"
+                      changeType="increase"
+                      icon={Users}
+                      delay={0}
+                    />
+                    <StatsCard
+                      title="Active SIMs"
+                      value={displayStats.activeSims.toLocaleString()}
+                      change="+8%"
+                      changeType="increase"
+                      icon={Phone}
+                      delay={0.1}
+                    />
+                    <StatsCard
+                      title="Mule Accounts"
+                      value={displayStats.muleAccounts.toLocaleString()}
+                      change="+23%"
+                      changeType="increase"
+                      icon={CreditCard}
+                      variant="warning"
+                      delay={0.2}
+                    />
+                    <StatsCard
+                      title="Devices Tracked"
+                      value={displayStats.devicesTracked.toLocaleString()}
+                      change="+5%"
+                      changeType="increase"
+                      icon={Smartphone}
+                      delay={0.3}
+                    />
+                    <StatsCard
+                      title="Est. Fraud Value"
+                      value={formatFraudValue(displayStats.estFraudValue)}
+                      change="+18%"
+                      changeType="increase"
+                      icon={IndianRupee}
+                      variant="threat"
+                      delay={0.4}
+                    />
+                  </>
+                )}
               </div>
 
               {/* Main Content Grid */}
@@ -184,14 +251,22 @@ const Index = () => {
                     <h2 className="text-lg font-semibold text-foreground">Top Kingpins</h2>
                   </div>
                   <div className="space-y-3 max-h-[540px] overflow-y-auto pr-2">
-                    {mockKingpins.map((kingpin, index) => (
-                      <KingpinCard
-                        key={kingpin.id}
-                        kingpin={kingpin}
-                        rank={index + 1}
-                        delay={index * 0.1}
-                      />
-                    ))}
+                    {kingpinsLoading ? (
+                      <>
+                        {[1, 2, 3].map((i) => (
+                          <Skeleton key={i} className="h-40" />
+                        ))}
+                      </>
+                    ) : (
+                      displayKingpins.map((kingpin, index) => (
+                        <KingpinCard
+                          key={kingpin.id}
+                          kingpin={kingpin}
+                          rank={index + 1}
+                          delay={index * 0.1}
+                        />
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -226,19 +301,27 @@ const Index = () => {
 
           {activeTab === 'kingpins' && (
             <div className="grid grid-cols-2 gap-6">
-              {mockKingpins.map((kingpin, index) => (
-                <motion.div
-                  key={kingpin.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <KingpinCard
-                    kingpin={kingpin}
-                    rank={index + 1}
-                  />
-                </motion.div>
-              ))}
+              {kingpinsLoading ? (
+                <>
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-48" />
+                  ))}
+                </>
+              ) : (
+                displayKingpins.map((kingpin, index) => (
+                  <motion.div
+                    key={kingpin.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.1 }}
+                  >
+                    <KingpinCard
+                      kingpin={kingpin}
+                      rank={index + 1}
+                    />
+                  </motion.div>
+                ))
+              )}
             </div>
           )}
 
