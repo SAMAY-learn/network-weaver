@@ -22,6 +22,7 @@ import UploadPanel from '@/components/UploadPanel';
 import ClusterAnalysis from '@/components/ClusterAnalysis';
 import SettingsPanel from '@/components/SettingsPanel';
 import SuspectsPanel from '@/components/SuspectsPanel';
+import ReportsPanel from '@/components/ReportsPanel';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { useKingpins, Kingpin } from '@/hooks/useKingpins';
 import { useAuth } from '@/hooks/useAuth';
@@ -354,19 +355,7 @@ const Index = () => {
           )}
 
           {activeTab === 'reports' && (
-            <div className="flex items-center justify-center h-full">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-center"
-              >
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
-                  <MapPin className="w-10 h-10 text-muted-foreground" />
-                </div>
-                <h3 className="text-xl font-semibold text-foreground mb-2">Coming Soon</h3>
-                <p className="text-muted-foreground">This feature is under development</p>
-              </motion.div>
-            </div>
+            <ReportsPanel />
           )}
 
           {activeTab === 'settings' && (
