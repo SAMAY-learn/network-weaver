@@ -22,6 +22,7 @@ interface HeaderProps {
   subtitle?: string;
   onSearch?: (query: string) => void;
   onFilterChange?: (filters: FilterState) => void;
+  onSuspectSelect?: (suspectId: string) => void;
 }
 
 export interface FilterState {
@@ -29,7 +30,7 @@ export interface FilterState {
   locations: string[];
 }
 
-const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
+const Header = ({ title, subtitle, onSearch, onFilterChange, onSuspectSelect }: HeaderProps) => {
   const { user, signOut } = useAuth();
   const { data: suspects } = useSuspects();
   const { 
@@ -210,8 +211,10 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
                   {searchResults.map((suspect) => (
                     <button
                       key={suspect.id}
-                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/50 transition-colors text-left"
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/50 transition-colors text-left cursor-pointer"
                       onClick={() => {
+                        onSuspectSelect?.(suspect.id);
+                        setSearchQuery('');
                         setShowSearchResults(false);
                       }}
                     >
