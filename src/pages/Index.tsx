@@ -1,11 +1,271 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { 
+  Users, 
+  Phone, 
+  CreditCard, 
+  Smartphone, 
+  TrendingUp, 
+  AlertTriangle,
+  Network as NetworkIcon,
+  IndianRupee,
+  MapPin
+} from 'lucide-react';
+import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
+import NetworkGraph from '@/components/NetworkGraph';
+import StatsCard from '@/components/StatsCard';
+import KingpinCard from '@/components/KingpinCard';
+import UploadPanel from '@/components/UploadPanel';
+import ClusterAnalysis from '@/components/ClusterAnalysis';
+
+const mockKingpins = [
+  {
+    id: 'K1',
+    name: 'Rajan Kumar',
+    alias: 'CYBER-KING-01',
+    threatScore: 95,
+    connections: 47,
+    simCards: 12,
+    accounts: 8,
+    devices: 5,
+    location: 'Jamtara, JH',
+    lastActive: '2 hours ago',
+    fraudAmount: '1.2Cr',
+  },
+  {
+    id: 'K2',
+    name: 'Vikram Singh',
+    alias: 'MULE-MASTER',
+    threatScore: 88,
+    connections: 35,
+    simCards: 8,
+    accounts: 15,
+    devices: 4,
+    location: 'Deoghar, JH',
+    lastActive: '5 hours ago',
+    fraudAmount: '89L',
+  },
+  {
+    id: 'K3',
+    name: 'Arun Yadav',
+    alias: 'SIM-GHOST',
+    threatScore: 82,
+    connections: 28,
+    simCards: 23,
+    accounts: 4,
+    devices: 7,
+    location: 'Jamtara, JH',
+    lastActive: '1 day ago',
+    fraudAmount: '56L',
+  },
+  {
+    id: 'K4',
+    name: 'Deepak Thakur',
+    alias: 'CALL-CENTER',
+    threatScore: 75,
+    connections: 22,
+    simCards: 6,
+    accounts: 3,
+    devices: 3,
+    location: 'Ranchi, JH',
+    lastActive: '3 hours ago',
+    fraudAmount: '34L',
+  },
+  {
+    id: 'K5',
+    name: 'Manish Gupta',
+    alias: 'MONEY-TRAIL',
+    threatScore: 68,
+    connections: 18,
+    simCards: 4,
+    accounts: 12,
+    devices: 2,
+    location: 'Dhanbad, JH',
+    lastActive: '6 hours ago',
+    fraudAmount: '28L',
+  },
+];
 
 const Index = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const headerConfig: Record<string, { title: string; subtitle: string }> = {
+    dashboard: { title: 'Intelligence Dashboard', subtitle: 'Real-time cybercrime network analysis' },
+    network: { title: 'Network Visualization', subtitle: 'Interactive fraud network mapping' },
+    kingpins: { title: 'Kingpin Identification', subtitle: 'High-value targets ranked by threat score' },
+    suspects: { title: 'Suspect Database', subtitle: 'All identified suspects and their profiles' },
+    upload: { title: 'Data Ingestion', subtitle: 'Upload CDR, FIR, and transaction records' },
+    reports: { title: 'Intelligence Reports', subtitle: 'Generated analysis and case files' },
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header 
+          title={headerConfig[activeTab]?.title || 'Dashboard'} 
+          subtitle={headerConfig[activeTab]?.subtitle} 
+        />
+        
+        <main className="flex-1 overflow-auto p-6">
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Stats Row */}
+              <div className="grid grid-cols-5 gap-4">
+                <StatsCard
+                  title="Total Suspects"
+                  value="847"
+                  change="+12%"
+                  changeType="increase"
+                  icon={Users}
+                  delay={0}
+                />
+                <StatsCard
+                  title="Active SIMs"
+                  value="2,341"
+                  change="+8%"
+                  changeType="increase"
+                  icon={Phone}
+                  delay={0.1}
+                />
+                <StatsCard
+                  title="Mule Accounts"
+                  value="512"
+                  change="+23%"
+                  changeType="increase"
+                  icon={CreditCard}
+                  variant="warning"
+                  delay={0.2}
+                />
+                <StatsCard
+                  title="Devices Tracked"
+                  value="1,089"
+                  change="+5%"
+                  changeType="increase"
+                  icon={Smartphone}
+                  delay={0.3}
+                />
+                <StatsCard
+                  title="Est. Fraud Value"
+                  value="₹4.8Cr"
+                  change="+18%"
+                  changeType="increase"
+                  icon={IndianRupee}
+                  variant="threat"
+                  delay={0.4}
+                />
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-3 gap-6">
+                {/* Network Graph */}
+                <div className="col-span-2 glass-card rounded-xl p-4 border border-border/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <NetworkIcon className="w-5 h-5 text-primary" />
+                      <h2 className="text-lg font-semibold text-foreground">Live Network Graph</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
+                      <span className="text-xs text-muted-foreground">Real-time</span>
+                    </div>
+                  </div>
+                  <div className="h-[500px]">
+                    <NetworkGraph />
+                  </div>
+                </div>
+
+                {/* Kingpins Panel */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-destructive" />
+                    <h2 className="text-lg font-semibold text-foreground">Top Kingpins</h2>
+                  </div>
+                  <div className="space-y-3 max-h-[540px] overflow-y-auto pr-2">
+                    {mockKingpins.map((kingpin, index) => (
+                      <KingpinCard
+                        key={kingpin.id}
+                        kingpin={kingpin}
+                        rank={index + 1}
+                        delay={index * 0.1}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cluster Analysis */}
+              <div className="glass-card rounded-xl p-4 border border-border/50">
+                <ClusterAnalysis />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'network' && (
+            <div className="h-full glass-card rounded-xl p-4 border border-border/50">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <NetworkIcon className="w-5 h-5 text-primary" />
+                  <h2 className="text-lg font-semibold text-foreground">Full Network Visualization</h2>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="w-2 h-2 bg-destructive rounded-full" /> High Threat
+                    <span className="w-2 h-2 bg-warning rounded-full ml-2" /> Medium
+                    <span className="w-2 h-2 bg-success rounded-full ml-2" /> Low
+                  </div>
+                </div>
+              </div>
+              <div className="h-[calc(100%-60px)]">
+                <NetworkGraph />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'kingpins' && (
+            <div className="grid grid-cols-2 gap-6">
+              {mockKingpins.map((kingpin, index) => (
+                <motion.div
+                  key={kingpin.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <KingpinCard
+                    kingpin={kingpin}
+                    rank={index + 1}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'upload' && (
+            <div className="max-w-4xl mx-auto">
+              <div className="glass-card rounded-xl p-6 border border-border/50">
+                <UploadPanel />
+              </div>
+            </div>
+          )}
+
+          {(activeTab === 'suspects' || activeTab === 'reports') && (
+            <div className="flex items-center justify-center h-full">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-center"
+              >
+                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-secondary/50 flex items-center justify-center">
+                  <MapPin className="w-10 h-10 text-muted-foreground" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">Coming Soon</h3>
+                <p className="text-muted-foreground">This feature is under development</p>
+              </motion.div>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
