@@ -1,4 +1,3 @@
-import { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
 
@@ -12,7 +11,7 @@ interface StatsCardProps {
   delay?: number;
 }
 
-const StatsCard = forwardRef<HTMLDivElement, StatsCardProps>(({ 
+const StatsCard = ({ 
   title, 
   value, 
   change, 
@@ -20,7 +19,7 @@ const StatsCard = forwardRef<HTMLDivElement, StatsCardProps>(({
   icon: Icon,
   variant = 'default',
   delay = 0 
-}, ref) => {
+}: StatsCardProps) => {
   const variantStyles = {
     default: 'border-primary/20 hover:border-primary/40',
     threat: 'border-destructive/20 hover:border-destructive/40',
@@ -43,7 +42,6 @@ const StatsCard = forwardRef<HTMLDivElement, StatsCardProps>(({
 
   return (
     <motion.div
-      ref={ref}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay }}
@@ -67,8 +65,6 @@ const StatsCard = forwardRef<HTMLDivElement, StatsCardProps>(({
       </div>
     </motion.div>
   );
-});
-
-StatsCard.displayName = 'StatsCard';
+};
 
 export default StatsCard;
