@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Suspect } from '@/hooks/useSuspects';
-import { MapPin, Key, AlertTriangle } from 'lucide-react';
-import { Button } from './ui/button';
+import { MapPin, AlertTriangle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 
 // Jharkhand district coordinates
 const JHARKHAND_LOCATIONS: Record<string, [number, number]> = {
@@ -47,11 +47,41 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const [mapboxToken, setMapboxToken] = useState(() => 
-    localStorage.getItem('mapbox_token') || ''
-  );
-  const [tokenInput, setTokenInput] = useState('');
+  const [mapboxToken, setMapboxToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+
+  // Fetch Mapbox token from Cloud
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const { data, error: fnError } = await supabase.functions.invoke('get-mapbox-token');
+        
+        if (fnError) {
+          console.error('Error fetching Mapbox token:', fnError);
+          setError('Failed to load map configuration');
+          return;
+        }
+        
+        if (data?.token) {
+          setMapboxToken(data.token);
+        } else if (data?.error) {
+          setError(data.error);
+        }
+      } catch (err) {
+        console.error('Error fetching Mapbox token:', err);
+        setError('Failed to load map configuration');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchToken();
+  }, []);
 
   // Group suspects by location with coordinates
   const suspectsByLocation = React.useMemo(() => {
@@ -86,24 +116,6 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
     return grouped;
   }, [suspects]);
 
-  const saveToken = () => {
-    if (tokenInput.trim()) {
-      localStorage.setItem('mapbox_token', tokenInput.trim());
-      setMapboxToken(tokenInput.trim());
-    }
-  };
-
-  const clearToken = () => {
-    localStorage.removeItem('mapbox_token');
-    setMapboxToken('');
-    setTokenInput('');
-    if (map.current) {
-      map.current.remove();
-      map.current = null;
-    }
-    setIsMapReady(false);
-  };
-
   useEffect(() => {
     if (!mapContainer.current || !mapboxToken) return;
 
@@ -129,10 +141,9 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
 
       map.current.on('error', (e) => {
         console.error('Mapbox error:', e);
-        // Check for invalid token via status code or message
-        const error = e.error as { status?: number; message?: string } | undefined;
-        if (error?.status === 401 || error?.message?.includes('invalid Mapbox access token')) {
-          clearToken();
+        const mapError = e.error as { status?: number; message?: string } | undefined;
+        if (mapError?.status === 401 || mapError?.status === 403) {
+          setError('Invalid Mapbox token. Please update the token in Cloud secrets.');
         }
       });
 
@@ -142,9 +153,9 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
         map.current?.remove();
         map.current = null;
       };
-    } catch (error) {
-      console.error('Failed to initialize map:', error);
-      clearToken();
+    } catch (err) {
+      console.error('Failed to initialize map:', err);
+      setError('Failed to initialize map');
     }
   }, [mapboxToken]);
 
@@ -277,7 +288,42 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
     });
   }, [suspectsByLocation, isMapReady, onSuspectClick]);
 
-  // Token input screen
+  // Loading state
+  if (isLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-6 rounded-xl border border-border/50 flex items-center justify-center h-[400px]"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading map...</p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card p-6 rounded-xl border border-border/50"
+      >
+        <div className="flex items-center gap-3 text-destructive">
+          <AlertTriangle className="w-5 h-5" />
+          <div>
+            <h3 className="font-semibold">Map Configuration Error</h3>
+            <p className="text-sm text-muted-foreground mt-1">{error}</p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // No token state
   if (!mapboxToken) {
     return (
       <motion.div
@@ -285,45 +331,13 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
         animate={{ opacity: 1, y: 0 }}
         className="glass-card p-6 rounded-xl border border-border/50"
       >
-        <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Key className="w-5 h-5 text-primary" />
-          </div>
+        <div className="flex items-center gap-3">
+          <MapPin className="w-5 h-5 text-muted-foreground" />
           <div>
             <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
             <p className="text-sm text-muted-foreground">
-              Enter your Mapbox public token to enable the map
+              Please configure MAPBOX_PUBLIC_TOKEN in Cloud secrets to enable the map.
             </p>
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-              Mapbox Public Token
-            </label>
-            <input
-              type="text"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="pk.eyJ1Ijo..."
-              className="w-full px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button onClick={saveToken} disabled={!tokenInput.trim()}>
-              <MapPin className="w-4 h-4 mr-2" />
-              Enable Map
-            </Button>
-            <a
-              href="https://mapbox.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline"
-            >
-              Get a free token →
-            </a>
           </div>
         </div>
       </motion.div>
@@ -358,9 +372,6 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
               <span className="text-muted-foreground">Low</span>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={clearToken} className="text-xs">
-            Change Token
-          </Button>
         </div>
       </div>
 
