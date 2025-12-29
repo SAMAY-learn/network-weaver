@@ -26,6 +26,8 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
     { id: 'reports', label: 'Reports', icon: FileSearch },
   ];
 
+  const isSettingsActive = activeTab === 'settings';
+
   return (
     <motion.aside
       initial={{ x: -100, opacity: 0 }}
@@ -97,10 +99,19 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
 
       {/* Settings */}
       <div className="p-4">
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-sidebar-accent/50 transition-colors">
-          <Settings className="w-5 h-5" />
+        <motion.button 
+          onClick={() => onTabChange('settings')}
+          whileHover={{ x: 4 }}
+          whileTap={{ scale: 0.98 }}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+            isSettingsActive 
+              ? 'bg-sidebar-accent text-sidebar-primary border-l-2 border-primary' 
+              : 'text-muted-foreground hover:bg-sidebar-accent/50'
+          }`}
+        >
+          <Settings className={`w-5 h-5 ${isSettingsActive ? 'text-primary' : ''}`} />
           Settings
-        </button>
+        </motion.button>
       </div>
     </motion.aside>
   );

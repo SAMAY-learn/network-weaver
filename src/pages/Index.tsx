@@ -18,6 +18,7 @@ import StatsCard from '@/components/StatsCard';
 import KingpinCard from '@/components/KingpinCard';
 import UploadPanel from '@/components/UploadPanel';
 import ClusterAnalysis from '@/components/ClusterAnalysis';
+import SettingsPanel from '@/components/SettingsPanel';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { useKingpins, Kingpin } from '@/hooks/useKingpins';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -145,6 +146,7 @@ const Index = () => {
     suspects: { title: 'Suspect Database', subtitle: 'All identified suspects and their profiles' },
     upload: { title: 'Data Ingestion', subtitle: 'Upload CDR, FIR, and transaction records' },
     reports: { title: 'Intelligence Reports', subtitle: 'Generated analysis and case files' },
+    settings: { title: 'Settings', subtitle: 'Configure system preferences and options' },
   };
 
   // Display values - use real data or show mock values
@@ -347,6 +349,10 @@ const Index = () => {
                 <p className="text-muted-foreground">This feature is under development</p>
               </motion.div>
             </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPanel />
           )}
         </main>
       </div>
