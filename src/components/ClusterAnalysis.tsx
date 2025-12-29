@@ -1,17 +1,10 @@
 import { motion } from 'framer-motion';
 import { Users, AlertTriangle, TrendingUp, Target } from 'lucide-react';
+import { useFraudClusters, FraudCluster } from '@/hooks/useFraudClusters';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface Cluster {
-  id: string;
-  name: string;
-  members: number;
-  threat: 'high' | 'medium' | 'low';
-  fraudAmount: string;
-  primaryLocation: string;
-  status: 'active' | 'monitoring' | 'contained';
-}
-
-const mockClusters: Cluster[] = [
+// Mock data for when database is empty
+const mockClusters: FraudCluster[] = [
   {
     id: 'C1',
     name: 'Jamtara Ring Alpha',
@@ -60,6 +53,29 @@ const mockClusters: Cluster[] = [
 ];
 
 const ClusterAnalysis = () => {
+  const { data: clusters, isLoading, error } = useFraudClusters();
+
+  // Use real data if available, otherwise use mock data
+  const displayClusters = clusters?.length ? clusters : mockClusters;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <Skeleton className="h-6 w-48 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-2">
@@ -74,7 +90,7 @@ const ClusterAnalysis = () => {
       </div>
 
       <div className="space-y-3">
-        {mockClusters.map((cluster, index) => (
+        {displayClusters.map((cluster, index) => (
           <motion.div
             key={cluster.id}
             initial={{ opacity: 0, y: 10 }}
