@@ -1,15 +1,185 @@
-import { motion } from 'framer-motion';
-import { Search, Bell, User, Filter, LogOut } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Bell, User, Filter, LogOut, X, Check, AlertTriangle, Info, Clock } from 'lucide-react';
 import { Button } from './ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useSuspects } from '@/hooks/useSuspects';
+import { ScrollArea } from './ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuCheckboxItem,
+} from './ui/dropdown-menu';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
+  onSearch?: (query: string) => void;
+  onFilterChange?: (filters: FilterState) => void;
 }
 
-const Header = ({ title, subtitle }: HeaderProps) => {
+export interface FilterState {
+  threatLevel: ('high' | 'medium' | 'low')[];
+  locations: string[];
+}
+
+interface Notification {
+  id: string;
+  type: 'alert' | 'info' | 'warning';
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+}
+
+// Mock notifications - in a real app these would come from the database
+const mockNotifications: Notification[] = [
+  {
+    id: '1',
+    type: 'alert',
+    title: 'High Threat Detected',
+    message: 'New kingpin identified in Jamtara network',
+    time: '2 min ago',
+    read: false,
+  },
+  {
+    id: '2',
+    type: 'warning',
+    title: 'Suspicious Activity',
+    message: '15 new SIM cards linked to suspect CYBER-KING-01',
+    time: '15 min ago',
+    read: false,
+  },
+  {
+    id: '3',
+    type: 'info',
+    title: 'Data Sync Complete',
+    message: 'CDR records processed successfully',
+    time: '1 hour ago',
+    read: true,
+  },
+  {
+    id: '4',
+    type: 'alert',
+    title: 'Money Trail Alert',
+    message: '₹5L transaction flagged in mule network',
+    time: '2 hours ago',
+    read: true,
+  },
+];
+
+const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
   const { user, signOut } = useAuth();
+  const { data: suspects } = useSuspects();
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<typeof suspects>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [filters, setFilters] = useState<FilterState>({
+    threatLevel: [],
+    locations: [],
+  });
+  
+  const searchRef = useRef<HTMLDivElement>(null);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Get unique locations from suspects
+  const locations = Array.from(new Set(suspects?.map(s => s.location).filter(Boolean) || []));
+
+  // Handle search
+  useEffect(() => {
+    if (searchQuery.trim() && suspects) {
+      const query = searchQuery.toLowerCase();
+      const filtered = suspects.filter(suspect => 
+        suspect.name.toLowerCase().includes(query) ||
+        suspect.alias?.toLowerCase().includes(query) ||
+        suspect.location?.toLowerCase().includes(query)
+      ).slice(0, 5);
+      setSearchResults(filtered);
+      setShowSearchResults(true);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+    
+    onSearch?.(searchQuery);
+  }, [searchQuery, suspects, onSearch]);
+
+  // Close search results on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle filter changes
+  const handleThreatLevelToggle = (level: 'high' | 'medium' | 'low') => {
+    setFilters(prev => {
+      const newThreatLevels = prev.threatLevel.includes(level)
+        ? prev.threatLevel.filter(l => l !== level)
+        : [...prev.threatLevel, level];
+      
+      const newFilters = { ...prev, threatLevel: newThreatLevels };
+      onFilterChange?.(newFilters);
+      return newFilters;
+    });
+  };
+
+  const handleLocationToggle = (location: string) => {
+    setFilters(prev => {
+      const newLocations = prev.locations.includes(location)
+        ? prev.locations.filter(l => l !== location)
+        : [...prev.locations, location];
+      
+      const newFilters = { ...prev, locations: newLocations };
+      onFilterChange?.(newFilters);
+      return newFilters;
+    });
+  };
+
+  const clearFilters = () => {
+    const clearedFilters = { threatLevel: [], locations: [] };
+    setFilters(clearedFilters);
+    onFilterChange?.(clearedFilters);
+  };
+
+  // Handle notification actions
+  const markAsRead = (id: string) => {
+    setNotifications(prev => 
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const clearNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'alert':
+        return <AlertTriangle className="w-4 h-4 text-destructive" />;
+      case 'warning':
+        return <AlertTriangle className="w-4 h-4 text-warning" />;
+      case 'info':
+        return <Info className="w-4 h-4 text-primary" />;
+    }
+  };
+
+  const activeFiltersCount = filters.threatLevel.length + filters.locations.length;
 
   return (
     <motion.header
@@ -24,25 +194,220 @@ const Header = ({ title, subtitle }: HeaderProps) => {
 
       <div className="flex items-center gap-4">
         {/* Search */}
-        <div className="relative">
+        <div className="relative" ref={searchRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search suspects, SIMs, accounts..."
-            className="pl-10 pr-4 py-2 w-80 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+            className="pl-10 pr-10 py-2 w-80 bg-secondary/50 border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
           />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+              onClick={() => {
+                setSearchQuery('');
+                setShowSearchResults(false);
+              }}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          )}
+          
+          {/* Search Results Dropdown */}
+          <AnimatePresence>
+            {showSearchResults && searchResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden"
+              >
+                <div className="p-2">
+                  <p className="text-xs text-muted-foreground px-2 py-1">
+                    Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div className="border-t border-border">
+                  {searchResults.map((suspect) => (
+                    <button
+                      key={suspect.id}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/50 transition-colors text-left"
+                      onClick={() => {
+                        setShowSearchResults(false);
+                        // Could navigate to suspect detail or trigger a callback
+                      }}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${
+                        suspect.threat_level === 'high' ? 'bg-destructive' :
+                        suspect.threat_level === 'medium' ? 'bg-warning' : 'bg-success'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {suspect.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {suspect.alias} • {suspect.location}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        suspect.threat_level === 'high' ? 'bg-destructive/20 text-destructive' :
+                        suspect.threat_level === 'medium' ? 'bg-warning/20 text-warning' : 'bg-success/20 text-success'
+                      }`}>
+                        {suspect.threat_score}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Filter */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Filter className="w-5 h-5" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Filter className="w-5 h-5" />
+              {activeFiltersCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-primary-foreground text-[10px] font-medium rounded-full flex items-center justify-center">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="flex items-center justify-between">
+              Filters
+              {activeFiltersCount > 0 && (
+                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={clearFilters}>
+                  Clear all
+                </Button>
+              )}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Threat Level</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={filters.threatLevel.includes('high')}
+              onCheckedChange={() => handleThreatLevelToggle('high')}
+            >
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-destructive" />
+                High Threat
+              </span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={filters.threatLevel.includes('medium')}
+              onCheckedChange={() => handleThreatLevelToggle('medium')}
+            >
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-warning" />
+                Medium Threat
+              </span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={filters.threatLevel.includes('low')}
+              onCheckedChange={() => handleThreatLevelToggle('low')}
+            >
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-success" />
+                Low Threat
+              </span>
+            </DropdownMenuCheckboxItem>
+            
+            {locations.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">Location</DropdownMenuLabel>
+                {locations.slice(0, 5).map((location) => (
+                  <DropdownMenuCheckboxItem
+                    key={location}
+                    checked={filters.locations.includes(location!)}
+                    onCheckedChange={() => handleLocationToggle(location!)}
+                  >
+                    {location}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full animate-pulse" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-0 right-0 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-medium rounded-full flex items-center justify-center animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel className="flex items-center justify-between">
+              Notifications
+              {unreadCount > 0 && (
+                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={markAllAsRead}>
+                  Mark all read
+                </Button>
+              )}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            
+            <ScrollArea className="h-80">
+              {notifications.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">
+                  No notifications
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`p-3 border-b border-border last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer ${
+                      !notification.read ? 'bg-primary/5' : ''
+                    }`}
+                    onClick={() => markAsRead(notification.id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">
+                        {getNotificationIcon(notification.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${!notification.read ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {notification.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {notification.message}
+                        </p>
+                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          {notification.time}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearNotification(notification.id);
+                        }}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </ScrollArea>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* User */}
         <div className="flex items-center gap-3 pl-4 border-l border-border">
