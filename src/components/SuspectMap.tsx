@@ -129,7 +129,9 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
 
       map.current.on('error', (e) => {
         console.error('Mapbox error:', e);
-        if (e.error?.message?.includes('401')) {
+        // Check for invalid token via status code or message
+        const error = e.error as { status?: number; message?: string } | undefined;
+        if (error?.status === 401 || error?.message?.includes('invalid Mapbox access token')) {
           clearToken();
         }
       });
