@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import cytoscape, { Core, NodeSingular } from 'cytoscape';
+import cytoscape, { Core, NodeSingular, CollectionReturnValue } from 'cytoscape';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNetworkGraph, NetworkNode, NetworkEdge } from '@/hooks/useNetworkGraph';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ZoomIn, ZoomOut, Maximize2, Minimize2, RotateCcw, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Minimize2, RotateCcw, X, Route, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 // Mock data for when database is empty
 const mockNodes: NetworkNode[] = [
@@ -94,12 +95,22 @@ interface SelectedNodeInfo {
   connections: number;
 }
 
+interface PathNode {
+  id: string;
+  label: string;
+}
+
 const CytoscapeGraph = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const { data: networkData, isLoading } = useNetworkGraph();
   const [selectedNode, setSelectedNode] = useState<SelectedNodeInfo | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [pathMode, setPathMode] = useState(false);
+  const [pathStart, setPathStart] = useState<PathNode | null>(null);
+  const [pathEnd, setPathEnd] = useState<PathNode | null>(null);
+  const [pathFound, setPathFound] = useState<boolean | null>(null);
+  const [pathLength, setPathLength] = useState<number>(0);
 
   const nodes = networkData?.nodes.length ? networkData.nodes : mockNodes;
   const edges = networkData?.edges.length ? networkData.edges : mockEdges;
@@ -193,6 +204,56 @@ const CytoscapeGraph = () => {
             'opacity': 1,
           },
         },
+        {
+          selector: '.path-highlighted',
+          style: {
+            'background-color': '#06b6d4',
+            'border-color': '#06b6d4',
+            'border-width': 5,
+            'shadow-blur': 30,
+            'shadow-color': '#06b6d4',
+            'shadow-opacity': 0.9,
+            'z-index': 999,
+          } as any,
+        },
+        {
+          selector: '.path-edge-highlighted',
+          style: {
+            'width': 5,
+            'line-color': '#06b6d4',
+            'target-arrow-color': '#06b6d4',
+            'opacity': 1,
+            'z-index': 999,
+          } as any,
+        },
+        {
+          selector: '.path-start',
+          style: {
+            'background-color': '#22c55e',
+            'border-color': '#22c55e',
+            'border-width': 6,
+            'shadow-blur': 35,
+            'shadow-color': '#22c55e',
+            'shadow-opacity': 1,
+          } as any,
+        },
+        {
+          selector: '.path-end',
+          style: {
+            'background-color': '#ef4444',
+            'border-color': '#ef4444',
+            'border-width': 6,
+            'shadow-blur': 35,
+            'shadow-color': '#ef4444',
+            'shadow-opacity': 1,
+          } as any,
+        },
+        {
+          selector: '.dimmed',
+          style: {
+            'opacity': 0.15,
+          } as any,
+        },
       ],
       layout: {
         name: 'preset',
@@ -263,26 +324,108 @@ const CytoscapeGraph = () => {
     setIsFullscreen(prev => !prev);
   }, []);
 
-  // Handle ESC key to exit fullscreen
+  // Path finding function
+  const findAndHighlightPath = useCallback((startId: string, endId: string) => {
+    if (!cyRef.current) return;
+    
+    const cy = cyRef.current;
+    
+    // Clear previous highlighting
+    cy.elements().removeClass('path-highlighted path-edge-highlighted path-start path-end dimmed');
+    
+    // Use Dijkstra's algorithm to find shortest path
+    const dijkstra = cy.elements().dijkstra({
+      root: `#${startId}`,
+      directed: false,
+    });
+    
+    const pathToTarget = dijkstra.pathTo(cy.$(`#${endId}`));
+    
+    if (pathToTarget.length > 0) {
+      // Dim all elements first
+      cy.elements().addClass('dimmed');
+      
+      // Highlight the path
+      pathToTarget.removeClass('dimmed');
+      pathToTarget.nodes().addClass('path-highlighted');
+      pathToTarget.edges().addClass('path-edge-highlighted');
+      
+      // Mark start and end
+      cy.$(`#${startId}`).addClass('path-start').removeClass('path-highlighted');
+      cy.$(`#${endId}`).addClass('path-end').removeClass('path-highlighted');
+      
+      // Fit to path with padding
+      cy.fit(pathToTarget, 80);
+      
+      setPathFound(true);
+      setPathLength(pathToTarget.nodes().length);
+    } else {
+      setPathFound(false);
+      setPathLength(0);
+    }
+  }, []);
+
+  // Clear path highlighting
+  const clearPath = useCallback(() => {
+    if (cyRef.current) {
+      cyRef.current.elements().removeClass('path-highlighted path-edge-highlighted path-start path-end dimmed');
+    }
+    setPathStart(null);
+    setPathEnd(null);
+    setPathFound(null);
+    setPathLength(0);
+  }, []);
+
+  // Toggle path mode
+  const togglePathMode = useCallback(() => {
+    if (pathMode) {
+      clearPath();
+    }
+    setPathMode(prev => !prev);
+  }, [pathMode, clearPath]);
+
+  // Handle node click for path selection
+  useEffect(() => {
+    if (!cyRef.current || !pathMode) return;
+
+    const handleNodeClick = (evt: any) => {
+      const node = evt.target;
+      const nodeInfo: PathNode = {
+        id: node.id(),
+        label: node.data('label'),
+      };
+
+      if (!pathStart) {
+        setPathStart(nodeInfo);
+        node.addClass('path-start');
+      } else if (!pathEnd && node.id() !== pathStart.id) {
+        setPathEnd(nodeInfo);
+        findAndHighlightPath(pathStart.id, node.id());
+      }
+    };
+
+    cyRef.current.on('tap', 'node', handleNodeClick);
+
+    return () => {
+      cyRef.current?.off('tap', 'node', handleNodeClick);
+    };
+  }, [pathMode, pathStart, pathEnd, findAndHighlightPath]);
+
+  // Handle ESC key to exit fullscreen or path mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false);
+      if (e.key === 'Escape') {
+        if (pathMode) {
+          clearPath();
+          setPathMode(false);
+        } else if (isFullscreen) {
+          setIsFullscreen(false);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
-
-  // Refit graph when fullscreen changes
-  useEffect(() => {
-    if (cyRef.current) {
-      setTimeout(() => {
-        cyRef.current?.resize();
-        cyRef.current?.fit(undefined, 50);
-      }, 100);
-    }
-  }, [isFullscreen]);
+  }, [isFullscreen, pathMode, clearPath]);
 
   const getNodeIcon = (type: NetworkNode['type']) => {
     switch (type) {
@@ -347,6 +490,15 @@ const CytoscapeGraph = () => {
             <ZoomOut className="w-4 h-4" />
           </Button>
           <Button 
+            variant={pathMode ? "default" : "glass"} 
+            size="icon" 
+            onClick={togglePathMode} 
+            title="Trace Path Between Nodes"
+            className={pathMode ? "bg-cyan-500 hover:bg-cyan-600" : ""}
+          >
+            <Route className="w-4 h-4" />
+          </Button>
+          <Button 
             variant="glass" 
             size="icon" 
             onClick={toggleFullscreen} 
@@ -359,76 +511,136 @@ const CytoscapeGraph = () => {
           </Button>
         </div>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 glass-card p-3 rounded-lg">
-        <div className="text-xs font-semibold text-muted-foreground mb-2">NODE TYPES</div>
-        <div className="flex flex-wrap gap-3 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span>👤</span>
-            <span className="text-muted-foreground">Suspect</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span>📱</span>
-            <span className="text-muted-foreground">SIM</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span>💻</span>
-            <span className="text-muted-foreground">Device</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span>💰</span>
-            <span className="text-muted-foreground">Account</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span>🌐</span>
-            <span className="text-muted-foreground">IP</span>
-          </div>
-        </div>
-        <div className="text-xs font-semibold text-muted-foreground mt-3 mb-2">EDGE TYPES</div>
-        <div className="flex flex-wrap gap-3 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-[#0ea5e9]" />
-            <span className="text-muted-foreground">Call</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-[#f59e0b]" />
-            <span className="text-muted-foreground">Transaction</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-[#a855f7]" />
-            <span className="text-muted-foreground">Shared Device</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-4 h-0.5 bg-[#22c55e]" />
-            <span className="text-muted-foreground">Shared IP</span>
-          </div>
-        </div>
-      </div>
+        {/* Path Mode UI */}
+        {pathMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute top-4 left-4 glass-card p-4 rounded-xl w-72 z-10"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Route className="w-4 h-4 text-cyan-400" />
+                <span className="text-sm font-semibold text-foreground">Path Tracing</span>
+              </div>
+              <Button variant="ghost" size="icon" onClick={togglePathMode} className="h-6 w-6">
+                <XCircle className="w-4 h-4" />
+              </Button>
+            </div>
 
-      {/* Selected Node Info */}
-      {selectedNode && (
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="absolute top-4 left-4 glass-card p-4 rounded-xl w-64"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-2xl">{getNodeIcon(selectedNode.type)}</span>
-            <span className={`text-xs font-mono px-2 py-1 rounded ${
-              selectedNode.threat === 'high' ? 'threat-badge-high' :
-              selectedNode.threat === 'medium' ? 'threat-badge-medium' :
-              'threat-badge-low'
-            }`}>
-              {selectedNode.threat.toUpperCase()} THREAT
-            </span>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500 shrink-0" />
+                <span className="text-muted-foreground">Start:</span>
+                <span className="text-foreground font-mono truncate">
+                  {pathStart?.label || 'Click a node...'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+                <span className="text-muted-foreground">End:</span>
+                <span className="text-foreground font-mono truncate">
+                  {pathEnd?.label || 'Click another node...'}
+                </span>
+              </div>
+            </div>
+
+            {pathFound !== null && (
+              <div className={`mt-3 p-2 rounded-lg ${pathFound ? 'bg-cyan-500/20' : 'bg-destructive/20'}`}>
+                {pathFound ? (
+                  <div className="text-xs text-cyan-400">
+                    <span className="font-semibold">Path found!</span>
+                    <span className="ml-2">{pathLength} nodes connected</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-destructive">No path exists between nodes</div>
+                )}
+              </div>
+            )}
+
+            {(pathStart || pathEnd) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={clearPath}
+                className="w-full mt-3 text-xs"
+              >
+                Clear Selection
+              </Button>
+            )}
+          </motion.div>
+        )}
+
+        {/* Legend */}
+        <div className="absolute bottom-4 left-4 glass-card p-3 rounded-lg z-10">
+          <div className="text-xs font-semibold text-muted-foreground mb-2">NODE TYPES</div>
+          <div className="flex flex-wrap gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span>👤</span>
+              <span className="text-muted-foreground">Suspect</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>📱</span>
+              <span className="text-muted-foreground">SIM</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>💻</span>
+              <span className="text-muted-foreground">Device</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>💰</span>
+              <span className="text-muted-foreground">Account</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span>🌐</span>
+              <span className="text-muted-foreground">IP</span>
+            </div>
           </div>
-          <div className="font-mono text-sm text-primary mb-2">{selectedNode.label}</div>
-          <div className="text-xs text-muted-foreground space-y-1">
-            <div>Type: <span className="text-foreground capitalize">{selectedNode.type}</span></div>
-            <div>Connections: <span className="text-foreground">{selectedNode.connections}</span></div>
-            <div>ID: <span className="text-foreground">{selectedNode.id.slice(0, 8)}...</span></div>
+          <div className="text-xs font-semibold text-muted-foreground mt-3 mb-2">EDGE TYPES</div>
+          <div className="flex flex-wrap gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-[#0ea5e9]" />
+              <span className="text-muted-foreground">Call</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-[#f59e0b]" />
+              <span className="text-muted-foreground">Transaction</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-[#a855f7]" />
+              <span className="text-muted-foreground">Shared Device</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-0.5 bg-[#22c55e]" />
+              <span className="text-muted-foreground">Shared IP</span>
+            </div>
           </div>
-        </motion.div>
+        </div>
+
+        {/* Selected Node Info - only show when not in path mode */}
+        {selectedNode && !pathMode && (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="absolute top-4 left-4 glass-card p-4 rounded-xl w-64 z-10"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-2xl">{getNodeIcon(selectedNode.type)}</span>
+              <span className={`text-xs font-mono px-2 py-1 rounded ${
+                selectedNode.threat === 'high' ? 'threat-badge-high' :
+                selectedNode.threat === 'medium' ? 'threat-badge-medium' :
+                'threat-badge-low'
+              }`}>
+                {selectedNode.threat.toUpperCase()} THREAT
+              </span>
+            </div>
+            <div className="font-mono text-sm text-primary mb-2">{selectedNode.label}</div>
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div>Type: <span className="text-foreground capitalize">{selectedNode.type}</span></div>
+              <div>Connections: <span className="text-foreground">{selectedNode.connections}</span></div>
+              <div>ID: <span className="text-foreground">{selectedNode.id.slice(0, 8)}...</span></div>
+            </div>
+          </motion.div>
         )}
       </motion.div>
     </AnimatePresence>
