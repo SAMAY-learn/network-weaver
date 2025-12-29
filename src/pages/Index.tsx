@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Users, 
@@ -9,11 +10,12 @@ import {
   AlertTriangle,
   Network as NetworkIcon,
   IndianRupee,
-  MapPin
+  MapPin,
+  LogOut
 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import NetworkGraph from '@/components/NetworkGraph';
+import CytoscapeGraph from '@/components/CytoscapeGraph';
 import StatsCard from '@/components/StatsCard';
 import KingpinCard from '@/components/KingpinCard';
 import UploadPanel from '@/components/UploadPanel';
@@ -21,7 +23,9 @@ import ClusterAnalysis from '@/components/ClusterAnalysis';
 import SettingsPanel from '@/components/SettingsPanel';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { useKingpins, Kingpin } from '@/hooks/useKingpins';
+import { useAuth } from '@/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -108,9 +112,18 @@ const formatFraudValue = (amount: number): string => {
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { user, loading: authLoading, signOut } = useAuth();
   
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: kingpins, isLoading: kingpinsLoading } = useKingpins();
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   // Use real data if available, otherwise use mock data
   const displayKingpins = kingpins?.length ? kingpins : mockKingpins;
@@ -242,7 +255,7 @@ const Index = () => {
                     </div>
                   </div>
                   <div className="h-[500px]">
-                    <NetworkGraph />
+                    <CytoscapeGraph />
                   </div>
                 </div>
 
@@ -296,7 +309,7 @@ const Index = () => {
                 </div>
               </div>
               <div className="h-[calc(100%-60px)]">
-                <NetworkGraph />
+                <CytoscapeGraph />
               </div>
             </div>
           )}
