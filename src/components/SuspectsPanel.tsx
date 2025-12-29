@@ -353,6 +353,7 @@ const SuspectsPanel = () => {
               <SuspectMap 
                 suspects={filteredSuspects} 
                 onSuspectClick={(id) => setSelectedSuspectId(id)}
+                onClose={() => setShowMap(false)}
               />
             </motion.div>
           )}

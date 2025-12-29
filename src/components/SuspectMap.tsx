@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Suspect } from '@/hooks/useSuspects';
-import { MapPin, AlertTriangle, Loader2 } from 'lucide-react';
+import { MapPin, AlertTriangle, Loader2, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from './ui/button';
 
 // Jharkhand district coordinates
 const JHARKHAND_LOCATIONS: Record<string, [number, number]> = {
@@ -41,9 +42,10 @@ const JHARKHAND_CENTER: [number, number] = [85.5, 23.6];
 interface SuspectMapProps {
   suspects: Suspect[];
   onSuspectClick?: (suspectId: string) => void;
+  onClose?: () => void;
 }
 
-const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => {
+const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClose }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -312,12 +314,19 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
         animate={{ opacity: 1, y: 0 }}
         className="glass-card p-6 rounded-xl border border-border/50"
       >
-        <div className="flex items-center gap-3 text-destructive">
-          <AlertTriangle className="w-5 h-5" />
-          <div>
-            <h3 className="font-semibold">Map Configuration Error</h3>
-            <p className="text-sm text-muted-foreground mt-1">{error}</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-destructive">
+            <AlertTriangle className="w-5 h-5" />
+            <div>
+              <h3 className="font-semibold">Map Configuration Error</h3>
+              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+            </div>
           </div>
+          {onClose && (
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </motion.div>
     );
@@ -331,14 +340,21 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick }) => 
         animate={{ opacity: 1, y: 0 }}
         className="glass-card p-6 rounded-xl border border-border/50"
       >
-        <div className="flex items-center gap-3">
-          <MapPin className="w-5 h-5 text-muted-foreground" />
-          <div>
-            <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
-            <p className="text-sm text-muted-foreground">
-              Please configure MAPBOX_PUBLIC_TOKEN in Cloud secrets to enable the map.
-            </p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <MapPin className="w-5 h-5 text-muted-foreground" />
+            <div>
+              <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
+              <p className="text-sm text-muted-foreground">
+                Please configure MAPBOX_PUBLIC_TOKEN in Cloud secrets to enable the map.
+              </p>
+            </div>
           </div>
+          {onClose && (
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </motion.div>
     );
