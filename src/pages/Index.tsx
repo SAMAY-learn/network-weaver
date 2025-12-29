@@ -184,7 +184,8 @@ const Index = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
           title={headerConfig[activeTab]?.title || 'Dashboard'} 
-          subtitle={headerConfig[activeTab]?.subtitle} 
+          subtitle={headerConfig[activeTab]?.subtitle}
+          onSuspectSelect={setSelectedSuspectId}
         />
         
         <main className="flex-1 overflow-auto p-6">
