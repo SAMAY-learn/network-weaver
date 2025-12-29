@@ -23,6 +23,7 @@ interface HeaderProps {
   onSearch?: (query: string) => void;
   onFilterChange?: (filters: FilterState) => void;
   onSuspectSelect?: (suspectId: string) => void;
+  onNotificationClick?: (entityType: string, entityId: string) => void;
 }
 
 export interface FilterState {
@@ -30,7 +31,7 @@ export interface FilterState {
   locations: string[];
 }
 
-const Header = ({ title, subtitle, onSearch, onFilterChange, onSuspectSelect }: HeaderProps) => {
+const Header = ({ title, subtitle, onSearch, onFilterChange, onSuspectSelect, onNotificationClick }: HeaderProps) => {
   const { user, signOut } = useAuth();
   const { data: suspects } = useSuspects();
   const { 
@@ -350,10 +351,15 @@ const Header = ({ title, subtitle, onSearch, onFilterChange, onSuspectSelect }: 
                 notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-3 border-b border-border last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer group ${
+                    className={`p-3 border-b border-border last:border-0 hover:bg-secondary/50 transition-colors group ${
                       !notification.read ? 'bg-primary/5' : ''
-                    }`}
-                    onClick={() => markAsRead(notification.id)}
+                    } ${notification.entity_id ? 'cursor-pointer' : ''}`}
+                    onClick={() => {
+                      markAsRead(notification.id);
+                      if (notification.entity_type && notification.entity_id && onNotificationClick) {
+                        onNotificationClick(notification.entity_type, notification.entity_id);
+                      }
+                    }}
                   >
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5">
@@ -366,9 +372,16 @@ const Header = ({ title, subtitle, onSearch, onFilterChange, onSuspectSelect }: 
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                           {notification.message}
                         </p>
-                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          {formatTime(notification.created_at)}
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            {formatTime(notification.created_at)}
+                          </div>
+                          {notification.entity_id && (
+                            <span className="text-xs text-primary font-medium">
+                              View details →
+                            </span>
+                          )}
                         </div>
                       </div>
                       <Button

@@ -186,6 +186,13 @@ const Index = () => {
           title={headerConfig[activeTab]?.title || 'Dashboard'} 
           subtitle={headerConfig[activeTab]?.subtitle}
           onSuspectSelect={setSelectedSuspectId}
+          onNotificationClick={(entityType, entityId) => {
+            if (entityType === 'suspect' || entityType === 'sim_card') {
+              setSelectedSuspectId(entityId);
+            } else if (entityType === 'cluster') {
+              setSelectedClusterId(entityId);
+            }
+          }}
         />
         
         <main className="flex-1 overflow-auto p-6">
