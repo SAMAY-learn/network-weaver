@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Suspect } from '@/hooks/useSuspects';
-import { MapPin, AlertTriangle, Loader2, X, RefreshCw } from 'lucide-react';
+import { MapPin, AlertTriangle, Loader2, X, RefreshCw, Key } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from './ui/button';
@@ -370,6 +370,15 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={() => window.open('https://lovable.dev/projects/' + import.meta.env.VITE_SUPABASE_PROJECT_ID + '/settings/secrets', '_blank')}
+                className="gap-2"
+              >
+                <Key className="w-4 h-4" />
+                Add Token
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
