@@ -1,15 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, User, Filter, LogOut, X, Check, AlertTriangle, Info, Clock } from 'lucide-react';
+import { Search, Bell, User, Filter, LogOut, X, AlertTriangle, Info, Clock } from 'lucide-react';
 import { Button } from './ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useSuspects } from '@/hooks/useSuspects';
+import { useNotifications } from '@/hooks/useNotifications';
 import { ScrollArea } from './ui/scroll-area';
+import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
   DropdownMenuCheckboxItem,
@@ -27,69 +29,47 @@ export interface FilterState {
   locations: string[];
 }
 
-interface Notification {
-  id: string;
-  type: 'alert' | 'info' | 'warning';
-  title: string;
-  message: string;
-  time: string;
-  read: boolean;
-}
-
-// Mock notifications - in a real app these would come from the database
-const mockNotifications: Notification[] = [
-  {
-    id: '1',
-    type: 'alert',
-    title: 'High Threat Detected',
-    message: 'New kingpin identified in Jamtara network',
-    time: '2 min ago',
-    read: false,
-  },
-  {
-    id: '2',
-    type: 'warning',
-    title: 'Suspicious Activity',
-    message: '15 new SIM cards linked to suspect CYBER-KING-01',
-    time: '15 min ago',
-    read: false,
-  },
-  {
-    id: '3',
-    type: 'info',
-    title: 'Data Sync Complete',
-    message: 'CDR records processed successfully',
-    time: '1 hour ago',
-    read: true,
-  },
-  {
-    id: '4',
-    type: 'alert',
-    title: 'Money Trail Alert',
-    message: '₹5L transaction flagged in mule network',
-    time: '2 hours ago',
-    read: true,
-  },
-];
-
 const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
   const { user, signOut } = useAuth();
   const { data: suspects } = useSuspects();
+  const { 
+    notifications, 
+    isLoading: notificationsLoading,
+    newNotification,
+    clearNewNotification,
+    markAsRead, 
+    markAllAsRead, 
+    deleteNotification,
+    unreadCount 
+  } = useNotifications();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<typeof suspects>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [filters, setFilters] = useState<FilterState>({
     threatLevel: [],
     locations: [],
   });
   
   const searchRef = useRef<HTMLDivElement>(null);
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   // Get unique locations from suspects
   const locations = Array.from(new Set(suspects?.map(s => s.location).filter(Boolean) || []));
+
+  // Show toast for new notifications
+  useEffect(() => {
+    if (newNotification) {
+      const icon = newNotification.type === 'alert' ? '🚨' : 
+                   newNotification.type === 'warning' ? '⚠️' : 'ℹ️';
+      
+      toast(newNotification.title, {
+        description: newNotification.message,
+        icon: icon,
+        duration: 5000,
+      });
+      clearNewNotification();
+    }
+  }, [newNotification, clearNewNotification]);
 
   // Handle search
   useEffect(() => {
@@ -153,22 +133,7 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
     onFilterChange?.(clearedFilters);
   };
 
-  // Handle notification actions
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const clearNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
+  const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'alert':
         return <AlertTriangle className="w-4 h-4 text-destructive" />;
@@ -176,6 +141,16 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
         return <AlertTriangle className="w-4 h-4 text-warning" />;
       case 'info':
         return <Info className="w-4 h-4 text-primary" />;
+      default:
+        return <Info className="w-4 h-4 text-muted-foreground" />;
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch {
+      return 'Just now';
     }
   };
 
@@ -238,7 +213,6 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
                       className="w-full px-4 py-3 flex items-center gap-3 hover:bg-secondary/50 transition-colors text-left"
                       onClick={() => {
                         setShowSearchResults(false);
-                        // Could navigate to suspect detail or trigger a callback
                       }}
                     >
                       <div className={`w-2 h-2 rounded-full ${
@@ -344,7 +318,7 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
                 <span className="absolute top-0 right-0 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-medium rounded-full flex items-center justify-center animate-pulse">
-                  {unreadCount}
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </Button>
@@ -361,15 +335,19 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
             <DropdownMenuSeparator />
             
             <ScrollArea className="h-80">
-              {notifications.length === 0 ? (
+              {notificationsLoading ? (
                 <div className="py-8 text-center text-muted-foreground text-sm">
-                  No notifications
+                  Loading...
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">
+                  No notifications yet
                 </div>
               ) : (
                 notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-3 border-b border-border last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer ${
+                    className={`p-3 border-b border-border last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer group ${
                       !notification.read ? 'bg-primary/5' : ''
                     }`}
                     onClick={() => markAsRead(notification.id)}
@@ -387,16 +365,16 @@ const Header = ({ title, subtitle, onSearch, onFilterChange }: HeaderProps) => {
                         </p>
                         <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                           <Clock className="w-3 h-3" />
-                          {notification.time}
+                          {formatTime(notification.created_at)}
                         </div>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
-                          clearNotification(notification.id);
+                          deleteNotification(notification.id);
                         }}
                       >
                         <X className="w-3 h-3" />
