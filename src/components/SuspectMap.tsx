@@ -358,32 +358,47 @@ const SuspectMap: React.FC<SuspectMapProps> = ({ suspects, onSuspectClick, onClo
         animate={{ opacity: 1, y: 0 }}
         className="glass-card p-6 rounded-xl border border-border/50"
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MapPin className="w-5 h-5 text-muted-foreground" />
-            <div>
-              <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
-              <p className="text-sm text-muted-foreground">
-                Please configure MAPBOX_PUBLIC_TOKEN in Cloud secrets to enable the map.
-              </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MapPin className="w-5 h-5 text-muted-foreground" />
+              <div>
+                <h3 className="font-semibold text-foreground">Mapbox Token Required</h3>
+                <p className="text-sm text-muted-foreground">
+                  A Mapbox public token is needed to display the map.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fetchToken(true)}
+                disabled={isRetrying}
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+                Retry
+              </Button>
+              {onClose && (
+                <Button variant="ghost" size="icon" onClick={onClose}>
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => fetchToken(true)}
-              disabled={isRetrying}
-              className="gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
-              Retry
-            </Button>
-            {onClose && (
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="w-4 h-4" />
-              </Button>
-            )}
+          
+          {/* Instructions to add token */}
+          <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2">
+            <p className="font-medium text-foreground">How to add your Mapbox token:</p>
+            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>Go to <a href="https://mapbox.com" target="_blank" rel="noopener noreferrer" className="text-primary underline hover:no-underline">mapbox.com</a> and create an account</li>
+              <li>Find your public token in the Tokens section of your dashboard</li>
+              <li>In Lovable, go to <span className="font-mono bg-background px-1 rounded">Settings → Cloud → Secrets</span></li>
+              <li>Add a new secret named <span className="font-mono bg-background px-1 rounded">MAPBOX_PUBLIC_TOKEN</span></li>
+              <li>Paste your Mapbox public token as the value</li>
+              <li>Click "Retry" above to load the map</li>
+            </ol>
           </div>
         </div>
       </motion.div>
