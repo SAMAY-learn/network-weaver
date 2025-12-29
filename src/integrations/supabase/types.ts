@@ -412,6 +412,41 @@ export type Database = {
         }
         Relationships: []
       }
+      review_flags: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          reviewed_at: string | null
+          status: string
+          suspect_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason: string
+          reviewed_at?: string | null
+          status?: string
+          suspect_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          reviewed_at?: string | null
+          status?: string
+          suspect_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_flags_suspect_id_fkey"
+            columns: ["suspect_id"]
+            isOneToOne: false
+            referencedRelation: "suspects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sim_cards: {
         Row: {
           created_at: string
@@ -497,6 +532,38 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      watchlist: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          priority: string
+          suspect_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          priority?: string
+          suspect_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          priority?: string
+          suspect_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watchlist_suspect_id_fkey"
+            columns: ["suspect_id"]
+            isOneToOne: false
+            referencedRelation: "suspects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
