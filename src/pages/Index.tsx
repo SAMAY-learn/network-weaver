@@ -23,6 +23,8 @@ import ClusterAnalysis from '@/components/ClusterAnalysis';
 import SettingsPanel from '@/components/SettingsPanel';
 import SuspectsPanel from '@/components/SuspectsPanel';
 import ReportsPanel from '@/components/ReportsPanel';
+import SuspectDetailModal from '@/components/SuspectDetailModal';
+import ClusterDetailModal from '@/components/ClusterDetailModal';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { useKingpins, Kingpin } from '@/hooks/useKingpins';
 import { useAuth } from '@/hooks/useAuth';
@@ -113,6 +115,8 @@ const formatFraudValue = (amount: number): string => {
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedSuspectId, setSelectedSuspectId] = useState<string | null>(null);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { user, loading: authLoading, signOut } = useAuth();
@@ -281,6 +285,7 @@ const Index = () => {
                           kingpin={kingpin}
                           rank={index + 1}
                           delay={index * 0.1}
+                          onClick={() => setSelectedSuspectId(kingpin.id)}
                         />
                       ))
                     )}
@@ -290,7 +295,7 @@ const Index = () => {
 
               {/* Cluster Analysis */}
               <div className="glass-card rounded-xl p-4 border border-border/50">
-                <ClusterAnalysis />
+                <ClusterAnalysis onSelectCluster={setSelectedClusterId} />
               </div>
             </div>
           )}
@@ -335,6 +340,7 @@ const Index = () => {
                     <KingpinCard
                       kingpin={kingpin}
                       rank={index + 1}
+                      onClick={() => setSelectedSuspectId(kingpin.id)}
                     />
                   </motion.div>
                 ))
@@ -363,6 +369,20 @@ const Index = () => {
           )}
         </main>
       </div>
+
+      {/* Modals */}
+      <SuspectDetailModal
+        suspectId={selectedSuspectId}
+        onClose={() => setSelectedSuspectId(null)}
+      />
+      <ClusterDetailModal
+        clusterId={selectedClusterId}
+        onClose={() => setSelectedClusterId(null)}
+        onSelectSuspect={(suspectId) => {
+          setSelectedClusterId(null);
+          setSelectedSuspectId(suspectId);
+        }}
+      />
     </div>
   );
 };

@@ -6,9 +6,10 @@ interface KingpinCardProps {
   kingpin: Kingpin;
   rank: number;
   delay?: number;
+  onClick?: () => void;
 }
 
-const KingpinCard = ({ kingpin, rank, delay = 0 }: KingpinCardProps) => {
+const KingpinCard = ({ kingpin, rank, delay = 0, onClick }: KingpinCardProps) => {
   const threatColor = kingpin.threatScore >= 80 ? 'destructive' : kingpin.threatScore >= 50 ? 'warning' : 'success';
   
   return (
@@ -17,7 +18,8 @@ const KingpinCard = ({ kingpin, rank, delay = 0 }: KingpinCardProps) => {
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.4, delay }}
       whileHover={{ scale: 1.01 }}
-      className="glass-card p-4 rounded-xl border border-destructive/20 hover:border-destructive/40 transition-all duration-300 relative overflow-hidden"
+      onClick={onClick}
+      className="glass-card p-4 rounded-xl border border-destructive/20 hover:border-destructive/40 transition-all duration-300 relative overflow-hidden cursor-pointer"
     >
       {/* Threat indicator bar */}
       <div 
