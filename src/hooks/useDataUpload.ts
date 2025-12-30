@@ -117,29 +117,69 @@ export const useDataUpload = () => {
       }));
 
       const uploadResult = await uploadToDatabase(result.data);
+      const dataTypeLabel = result.data.type.replace('_', ' ');
+      const totalRecords = result.data.rowCount;
       
       if (!uploadResult.success) {
+        // Error notification - complete failure
+        await supabase.from('notifications').insert({
+          type: 'alert',
+          title: '❌ Upload Failed',
+          message: `Failed to upload ${dataTypeLabel}: ${uploadResult.error}`,
+          entity_type: result.data.type,
+        });
+
         setUploadState({
           status: 'error',
           progress: 0,
           message: uploadResult.error || 'Failed to upload data',
         });
+        
         toast({
           variant: 'destructive',
-          title: 'Upload Error',
+          title: '❌ Upload Failed',
           description: uploadResult.error || 'Failed to upload data',
+          duration: 5000,
         });
+        
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
         return false;
       }
 
-      // Create a notification in the database
-      const dataTypeLabel = result.data.type.replace('_', ' ');
-      await supabase.from('notifications').insert({
-        type: 'info',
-        title: 'Data Upload Complete',
-        message: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
-        entity_type: result.data.type,
-      });
+      // Determine if it's a partial upload (some records failed)
+      const isPartialUpload = uploadResult.inserted < totalRecords;
+      
+      if (isPartialUpload) {
+        // Warning notification - partial success
+        await supabase.from('notifications').insert({
+          type: 'warning',
+          title: '⚠️ Partial Upload',
+          message: `Imported ${uploadResult.inserted} of ${totalRecords} ${dataTypeLabel} records. Some records may have been skipped.`,
+          entity_type: result.data.type,
+        });
+
+        toast({
+          title: '⚠️ Partial Upload',
+          description: `Imported ${uploadResult.inserted} of ${totalRecords} ${dataTypeLabel} records`,
+          duration: 5000,
+          className: 'border-yellow-500 bg-yellow-500/10',
+        });
+      } else {
+        // Success notification - all records uploaded
+        await supabase.from('notifications').insert({
+          type: 'info',
+          title: '✅ Upload Complete',
+          message: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
+          entity_type: result.data.type,
+        });
+
+        toast({
+          title: '✅ Upload Complete',
+          description: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
+          duration: 5000,
+          className: 'border-green-500 bg-green-500/10',
+        });
+      }
 
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
@@ -156,19 +196,24 @@ export const useDataUpload = () => {
       setUploadState({
         status: 'complete',
         progress: 100,
-        message: `Successfully imported ${uploadResult.inserted} ${result.data.type.replace('_', ' ')} records`,
+        message: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
         parsedData: result.data,
-      });
-
-      toast({
-        title: '✅ Upload Complete',
-        description: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
-        duration: 5000,
       });
 
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      // Error notification for exceptions
+      await supabase.from('notifications').insert({
+        type: 'alert',
+        title: '❌ Upload Error',
+        message: `Upload failed: ${errorMessage}`,
+        entity_type: 'upload',
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      
       setUploadState({
         status: 'error',
         progress: 0,
@@ -176,8 +221,9 @@ export const useDataUpload = () => {
       });
       toast({
         variant: 'destructive',
-        title: 'Error',
+        title: '❌ Upload Error',
         description: errorMessage,
+        duration: 5000,
       });
       return false;
     }
