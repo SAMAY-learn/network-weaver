@@ -137,6 +137,11 @@ export const useDataUpload = () => {
       queryClient.invalidateQueries({ queryKey: ['kingpins'] });
       queryClient.invalidateQueries({ queryKey: ['fraud-clusters'] });
       queryClient.invalidateQueries({ queryKey: ['network-graph'] });
+      queryClient.invalidateQueries({ queryKey: ['suspects'] });
+      queryClient.invalidateQueries({ queryKey: ['sim-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['devices'] });
+      queryClient.invalidateQueries({ queryKey: ['mule-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['ip-addresses'] });
 
       setUploadState({
         status: 'complete',
