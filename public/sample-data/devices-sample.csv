@@ -1,0 +1,9 @@
+imei,device_model,last_location,is_active,threat_level
+123456789012345,Samsung Galaxy A52,Delhi,true,high
+123456789012346,Xiaomi Redmi Note 10,Jamtara,true,high
+123456789012347,iPhone 12,Mumbai,true,medium
+123456789012348,Oppo A74,Ranchi,true,high
+123456789012349,Vivo Y20,Bokaro,false,medium
+123456789012350,Realme 8,Hazaribagh,true,low
+123456789012351,OnePlus Nord,Giridih,true,medium
+123456789012352,Samsung Galaxy M31,Jamshedpur,true,high
