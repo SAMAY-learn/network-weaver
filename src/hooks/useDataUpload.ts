@@ -132,6 +132,15 @@ export const useDataUpload = () => {
         return false;
       }
 
+      // Create a notification in the database
+      const dataTypeLabel = result.data.type.replace('_', ' ');
+      await supabase.from('notifications').insert({
+        type: 'info',
+        title: 'Data Upload Complete',
+        message: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
+        entity_type: result.data.type,
+      });
+
       // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       queryClient.invalidateQueries({ queryKey: ['kingpins'] });
@@ -142,6 +151,7 @@ export const useDataUpload = () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] });
       queryClient.invalidateQueries({ queryKey: ['mule-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['ip-addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
 
       setUploadState({
         status: 'complete',
@@ -151,8 +161,9 @@ export const useDataUpload = () => {
       });
 
       toast({
-        title: 'Upload Complete',
-        description: `Successfully imported ${uploadResult.inserted} ${result.data.type.replace('_', ' ')} records`,
+        title: '✅ Upload Complete',
+        description: `Successfully imported ${uploadResult.inserted} ${dataTypeLabel} records`,
+        duration: 5000,
       });
 
       return true;
